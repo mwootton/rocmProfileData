@@ -116,6 +116,20 @@ void RocmSmiDataSource::work()
                     logger.monitorTable().insert(mrow);
                 }
 #endif
+#if 1
+                //rsmi_frequencies_t freqs;
+                ret = rsmi_dev_gpu_clk_freq_get(i, RSMI_CLK_TYPE_MEM, &freqs);
+                if (ret == RSMI_STATUS_SUCCESS) {
+                    MonitorTable::row mrow;
+                    mrow.deviceId = i;
+                    mrow.deviceType = "gpu";	// FIXME, use enums or somthing fancy
+                    mrow.monitorType = "mclk";	// FIXME, use enums or somthing fancy
+                    mrow.start = clocktime_ns();
+                    mrow.end = 0;
+                    mrow.value = fmt::format("{}", freqs.frequency[freqs.current] / 1000000);
+                    logger.monitorTable().insert(mrow);
+                }
+#endif
 #if 0
                 uint64_t pow;
                 ret = rsmi_dev_power_ave_get(i, 0, &pow);
@@ -130,7 +144,7 @@ void RocmSmiDataSource::work()
                     logger.monitorTable().insert(mrow);
                 }
 #endif
-#if 0
+#if 0 
                 int64_t temp;
                 ret = rsmi_dev_temp_metric_get(i, RSMI_TEMP_TYPE_FIRST, RSMI_TEMP_CURRENT, &temp);
                 if (ret == RSMI_STATUS_SUCCESS) {
@@ -141,6 +155,20 @@ void RocmSmiDataSource::work()
                     mrow.start = clocktime_ns();
                     mrow.end = 0;
                     mrow.value = fmt::format("{}", temp/1000);
+                    logger.monitorTable().insert(mrow);
+                }
+#endif
+#if 0
+                uint64_t size;
+                ret = rsmi_dev_memory_usage_get(i, RSMI_MEM_TYPE_VRAM, &size);
+                if (ret == RSMI_STATUS_SUCCESS) {
+                    MonitorTable::row mrow;
+                    mrow.deviceId = i;
+                    mrow.deviceType = "gpu";	// FIXME, use enums or somthing fancy
+                    mrow.monitorType = "vram";	// FIXME, use enums or somthing fancy
+                    mrow.start = clocktime_ns();
+                    mrow.end = 0;
+                    mrow.value = fmt::format("{}", size);
                     logger.monitorTable().insert(mrow);
                 }
 #endif

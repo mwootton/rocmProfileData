@@ -81,8 +81,8 @@ void MonitorTable::insert(const MonitorTable::row &row)
 {
     auto it = d->values.find(row);
     if (it == d->values.end()) {
-        d->values.insert(std::pair<MonitorTable::row, bool>(row, true));
-        it = d->values.find(row);
+        auto ret = d->values.insert(std::pair<MonitorTable::row, bool>(row, true));
+        it = ret.first;
     }
     MonitorTable::row &old = const_cast<MonitorTable::row&>((*it).first);  // Oh yes
 
