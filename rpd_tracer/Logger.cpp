@@ -62,6 +62,16 @@ void rpdflush()
 {
     Logger::singleton().rpdflush();
 }
+
+void rpd_rangePush(const char *domain, const char *apiName, const char* args)
+{
+    Logger::singleton().rpd_rangePush(domain, apiName, args);
+}
+
+void rpd_rangePop()
+{
+    Logger::singleton().rpd_rangePop();
+}
 }  // extern "C"
 
 // GFH - This mirrors the function in the pre-refactor code.  Allows both code paths to compile.
@@ -131,6 +141,43 @@ void Logger::rpdflush()
     createOverheadRecord(cb_begin_time, cb_end_time, "rpdflush", "");
 }
 
+void Logger::rpd_rangePush(const char *domain, const char *apiName, const char* args)
+{
+    {
+        std::unique_lock<std::mutex> lock(m_activeMutex);
+        if (m_activeCount == 0)
+            return;
+    }
+    ApiTable::row row;
+    row.pid = GetPid();
+    row.tid = GetTid();
+    row.start = clocktime_ns();
+    row.end = row.start;
+    row.apiName_id = m_stringTable->getOrCreate(apiName);
+    row.args_id = m_stringTable->getOrCreate(args);
+    row.api_id = 0;
+    m_apiTable->pushRoctx(row);
+}
+
+void Logger::rpd_rangePop()
+{
+    {
+        std::unique_lock<std::mutex> lock(m_activeMutex);
+        if (m_activeCount == 0)
+            return;
+    }
+    ApiTable::row row;
+    row.pid = GetPid();
+    row.tid = GetTid();
+    row.start = clocktime_ns();
+    row.end = row.start;
+    row.apiName_id = EMPTY_STRING_ID;
+    row.args_id = EMPTY_STRING_ID;
+    row.api_id = 0;
+    m_apiTable->popRoctx(row);
+}
+
+
 
 
 void Logger::init()
@@ -140,6 +187,7 @@ void Logger::init()
     const char *filename = getenv("RPDT_FILENAME");
     if (filename == NULL)
         filename = "./trace.rpd";
+    m_filename = filename;
 
     // Create table recorders
 
@@ -149,6 +197,7 @@ void Logger::init()
     m_copyApiTable = new CopyApiTable(filename);
     m_opTable = new OpTable(filename);
     m_apiTable = new ApiTable(filename);
+    m_monitorTable = new MonitorTable(filename);
 
     // Offset primary keys so they do not collide between sessions
     sqlite3_int64 offset = m_metadataTable->sessionId() * (sqlite3_int64(1) << 32);
@@ -162,7 +211,8 @@ void Logger::init()
     // Create one instance of each available datasource
     std::list<std::string> factories = {
         "RoctracerDataSourceFactory",
-        "CuptiDataSourceFactory"
+        "CuptiDataSourceFactory",
+        "RocmSmiDataSourceFactory"
         };
 
     void (*dl) = dlopen("librpd_tracer.so", RTLD_LAZY);
@@ -192,6 +242,8 @@ void Logger::init()
         for (auto it = m_sources.begin(); it != m_sources.end(); ++it)
             (*it)->startTracing();
     }
+    static std::once_flag register_once;
+    std::call_once(register_once, atexit, Logger::rpdFinalize);
 }
 
 static bool doFinalize = true;
@@ -214,6 +266,7 @@ void Logger::finalize()
         m_opTable->finalize();		// OpTable before subclassOpTables
         m_kernelApiTable->finalize();
         m_copyApiTable->finalize();
+        m_monitorTable->finalize();
         m_writeOverheadRecords = false;	// Don't make any new overhead records (api calls)
         m_apiTable->finalize();
         m_stringTable->finalize();	// String table last
