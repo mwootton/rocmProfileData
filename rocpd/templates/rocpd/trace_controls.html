@@ -30,6 +30,8 @@ body > * { margin: 20px; }
 
 <pre id="logs" cols="80" rows="20"></pre>
 
+<form action="{% url 'rocpd:trace_data'%}"><input type="submit" value="Download .json"></form>
+
 <script type="text/javascript">
 const ORIGIN = 'https://ui.perfetto.dev';
 
@@ -47,8 +49,15 @@ const btnFetch = document.getElementById('btn_fetch');
 //}
 
 async function fetchAndOpen() {
-    var enc = new TextEncoder();
-    const arrayBuffer = enc.encode('{"traceEvents": [ {}, ,{"pid":"2","tid":"0","name":"mlir_gen_igemm_conv2d_v4r4_fwd_xdlops0","ts":"3919007842167","dur":"726","ph":"X","args":{"desc":"KernelExecution"}} ] }')
+//    var enc = new TextEncoder();
+//    const arrayBuffer = enc.encode('{"traceEvents": [ {}, ,{"pid":"2","tid":"0","name":"mlir_gen_igemm_conv2d_v4r4_fwd_xdlops0","ts":"3919007842167","dur":"726","ph":"X","args":{"desc":"KernelExecution"}} ] }')
+    const traceUrl = "{{ request.build_absolute_uri }}data";
+    logs.innerText += `Fetching json...\n`;
+    const resp = await fetch(traceUrl);
+    const blob = await resp.blob();
+    logs.innerText += `buffering...\n`;
+    const arrayBuffer = await blob.arrayBuffer();
+
     logs.innerText += `opening ui.perfetto.dev\n`;
     openTrace(arrayBuffer, "ROCPD");
 }

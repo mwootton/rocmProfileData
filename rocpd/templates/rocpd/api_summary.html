@@ -16,16 +16,12 @@ RocmProfileData > Api Calls
     <table>
         <tr>
             <th>apiName</th>
-	    <th>args</th>
-	    <th>start</th>
-	    <th>end</th>
+	    <th>total calls</th>
 	</tr>
     {% for api in api_list %}
         <tr>
-            <td>{{ api.apiName.string }}</td>
-	    <td>{{ api.args.string }}</td>
-	    <td>{{ api.start }}</td>
-	    <td>{{ api.end }}</td>
+            <td>{{ api.sname }}</td>
+	    <td>{{ api.total_calls }}</td>
 	</tr>
     {% endfor %}
     </table>

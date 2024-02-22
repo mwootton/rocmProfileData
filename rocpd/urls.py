@@ -10,6 +10,7 @@ urlpatterns = [
     path('op', views.opSummary, name='op_index'),
     path('kernel', views.kernelSummary, name='kernel_index'),
     path('trace', views.traceSummary, name='trace_index'),
+    path('tracedata', views.traceData, name='trace_data'),
     path('graph', views.graphSummary, name='graph_index'),
     path('graph_kernel/<str:pk>', views.graphKernel, name='graph_kernel'),
     path('graph_launch/<str:pk>', views.graphLaunch, name='graph_launch'),
