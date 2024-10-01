@@ -26,6 +26,35 @@
 #include <dlfcn.h>
 #include <stdio.h>
 
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+    // C API functions ------------------------------------------------------------
+    static inline void rlog_markFull(const char *domain, const char *category, const char *apiname, const char *args);
+    static inline void rlog_markCategory(const char *category, const char *apiname, const char *args);
+    static inline void rlog_markArgs(const char *apiname, const char *args);
+
+    static inline void rlog_rangePushFull(const char *domain, const char *category, const char *apiname, const char *args);
+    static inline void rlog_rangePushCategory(const char *category, const char *apiname, const char *args);
+    static inline void rlog_rangePushArgs(const char *apiname, const char *args);
+
+    static inline void rlog_rangePop();
+
+    static inline int rlog_registerActiveCallback(void (*cb)());
+
+    static inline void rlog_setDefaultDomain(const char *ddomain);
+    static inline void rlog_setDefaultCategory(const char *dcat);
+    static inline const char *rlog_getProperty(const char *domain, const char *property, const char *defaultValue);
+    // END C API functions --------------------------------------------------------
+
+#ifdef __cplusplus
+}
+#endif
+
+
 #ifdef __cplusplus
 
 namespace rlog
