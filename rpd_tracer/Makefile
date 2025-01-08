@@ -16,6 +16,8 @@ ifneq (,$(HIP_PATH))
         $(info Building with roctracer)
         RPD_LIBS += -L/opt/rocm/lib -lroctracer64 -lroctx64 -lamdhip64 -lrocm_smi64
         RPD_INCLUDES += -I/opt/rocm/include -I/opt/rocm/include/roctracer -I/opt/rocm/include/hsa -I../../cpptrace_install/include
+        # to enable stackframe support
+        #RPD_INCLUDES += -DRPD_STACKFRAME_SUPPORT 
         RPD_SRCS += RoctracerDataSource.cpp #RocmSmiDataSource.cpp
         RPD_INCLUDES += -D__HIP_PLATFORM_AMD__
 endif

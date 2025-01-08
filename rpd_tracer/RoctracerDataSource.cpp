@@ -108,10 +108,8 @@ namespace {
 } // namespace
 
 // hard disable for now
-#define RPD_NO_UNWIND_SUPPORT
-#ifdef RPD_NO_UNWIND_SUPPORT
-int RoctracerDataSource::unwind(Logger &logger, const char *api, const sqlite_int64 api_id) {return 0;}
-#else
+#ifdef RPD_STACKFRAME_SUPPORT
+#warning "Enabling stackframe support for rpd tracer."
 int RoctracerDataSource::unwind(Logger &logger, const char *api, const sqlite_int64 api_id) {
 
 #if 0
@@ -166,6 +164,8 @@ int RoctracerDataSource::unwind(Logger &logger, const char *api, const sqlite_in
 
      return 0;
 }
+#else
+int RoctracerDataSource::unwind(Logger &logger, const char *api, const sqlite_int64 api_id) {return 0;}
 #endif
 
 void RoctracerDataSource::api_callback(

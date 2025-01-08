@@ -46,8 +46,7 @@ make; make install
 This will install python modules that are used to manipulate trace files.
 It will also build and install the native tracer, rpd_tracer.
 
-Stackframe support will require [cpptrace](https://github.com/jeremy-rifkin/cpptrace). `install.sh` will clone and build a local copy.
-
+Stackframe support will require [cpptrace](https://github.com/jeremy-rifkin/cpptrace). `install.sh` will clone and build a local copy. Additionally, `rpd_tracer/Makefile` needs to be edited to include `-DRPD_STACKFRAME_SUPPORT`.
 
 ## Quickstart
 
