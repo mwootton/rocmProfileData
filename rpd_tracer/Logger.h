@@ -28,7 +28,6 @@
 
 #include "Table.h"
 #include "DataSource.h"
-#include <iostream>
 
 const sqlite_int64 EMPTY_STRING_ID = 1;
 
