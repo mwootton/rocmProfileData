@@ -107,7 +107,6 @@ namespace {
     int mapDeviceId(int id) { return id - deviceOffset; };
 } // namespace
 
-// hard disable for now
 #ifndef RPD_STACKFRAME_SUPPORT
 int RoctracerDataSource::unwind(Logger &logger, const char *api, const sqlite_int64 api_id) {
 
