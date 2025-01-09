@@ -196,7 +196,6 @@ void RoctracerDataSource::api_callback(
             row.apiName_id = name_id;
             row.args_id = EMPTY_STRING_ID;
             row.api_id = data->correlation_id;
-
 #if 1
             switch (cid) {
                 case HIP_API_ID_hipMalloc:
