@@ -28,6 +28,7 @@
 
 #include "Table.h"
 #include "DataSource.h"
+#include <iostream>
 
 const sqlite_int64 EMPTY_STRING_ID = 1;
 
@@ -66,6 +67,7 @@ public:
     static void rpdFinalize() __attribute__((destructor));
 
     const std::string filename() { return m_filename; };
+    bool writeStackFrames() { return m_writeStackFrames; };
 
 private:
     int m_activeCount {0};
@@ -87,6 +89,7 @@ private:
 
     std::string m_filename;
     bool m_writeOverheadRecords {true};
+    bool m_writeStackFrames {false};
 
     bool m_done {false};
     int m_period{1};

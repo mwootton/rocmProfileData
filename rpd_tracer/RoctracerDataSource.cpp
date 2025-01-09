@@ -108,9 +108,10 @@ namespace {
 } // namespace
 
 // hard disable for now
-#ifdef RPD_STACKFRAME_SUPPORT
-#warning "Enabling stackframe support for rpd tracer."
+#ifndef RPD_STACKFRAME_SUPPORT
 int RoctracerDataSource::unwind(Logger &logger, const char *api, const sqlite_int64 api_id) {
+
+     if (!logger.writeStackFrames()) return 0;
 
 #if 0
      // for reference: full stack w/o manipulations
