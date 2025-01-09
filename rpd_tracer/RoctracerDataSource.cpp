@@ -812,28 +812,34 @@ void RoctracerDataSource::api_callback(
                     row.args_id = logger.stringTable().getOrCreate(
                         fmt::format("stream = {} | mode = {}", (void*)data->args.hipStreamBeginCapture.stream, data->args.hipStreamBeginCapture.mode)
                     );
+                    unwind(logger, name, row.api_id);
                     break;
                 case HIP_API_ID_hipStreamEndCapture:
                     row.args_id = logger.stringTable().getOrCreate(
                         fmt::format("stream = {} | graph = {}", (void*)data->args.hipStreamEndCapture.stream, (void*)*(data->args.hipStreamEndCapture.pGraph))
                     );
+                    unwind(logger, name, row.api_id);
                     break;
                 case HIP_API_ID_hipGraphInstantiate:
                     row.args_id = logger.stringTable().getOrCreate(
                         fmt::format("graphExec = {} | graph = {}", (void *)*(data->args.hipGraphInstantiate.pGraphExec), (void *)data->args.hipGraphInstantiate.graph)
                     );
+                    unwind(logger, name, row.api_id);
                     break;
                 case HIP_API_ID_hipGraphInstantiateWithFlags:
                     row.args_id = logger.stringTable().getOrCreate(
                         fmt::format("graphExec = {} | graph = {}", (void *)*(data->args.hipGraphInstantiateWithFlags.pGraphExec), (void *)data->args.hipGraphInstantiateWithFlags.graph)
                     );
+                    unwind(logger, name, row.api_id);
                     break;
                 case HIP_API_ID_hipGraphLaunch:
                     row.args_id = logger.stringTable().getOrCreate(
                         fmt::format("graphExec = {} | stream = {}", (void *)data->args.hipGraphLaunch.graphExec, (void *)data->args.hipGraphLaunch.stream)
                     );
+                    unwind(logger, name, row.api_id);
                     break;
                 default:
+                    unwind(logger, name, row.api_id);
                     break;
             }
 #endif
