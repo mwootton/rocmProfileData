@@ -35,6 +35,7 @@
 #include <vector>
 #include <array>
 #include <string>
+#include <set> // FIXME remove
 
 #include <sqlite3.h>
 #include <fmt/format.h>
@@ -683,7 +684,7 @@ void RocprofDataSource::buffer_callback(rocprofiler_context_id_t context, rocpro
                 rocprofiler_iterate_buffer_tracing_record_args(
                     *header, extract_hip_args,
                     &json);
-                fprintf(stderr, "%s\n", json.dump().c_str());
+                //fprintf(stderr, "%s\n", json.dump().c_str());
 
                 // Add an api table entry
                 sqlite3_int64 name_id = logger.stringTable().getOrCreate(std::string(s->name_info[hipapi.kind][hipapi.operation]).c_str());
@@ -700,9 +701,99 @@ void RocprofDataSource::buffer_callback(rocprofiler_context_id_t context, rocpro
                 logger.apiTable().insert(row);
             }
         }
+        else if (header->category == ROCPROFILER_BUFFER_CATEGORY_COUNTERS) {
+            if (header->kind == ROCPROFILER_COUNTER_RECORD_PROFILE_COUNTING_DISPATCH_HEADER) {
+                //fprintf(stderr, "counter buffer: dispatch_header\n");
+            }
+            else if (header->kind == ROCPROFILER_COUNTER_RECORD_VALUE) {
+                auto* record = static_cast<rocprofiler_counter_record_t*>(header->payload);
+                rocprofiler_counter_id_t counter_id = {.handle = 0};
+
+                rocprofiler_query_record_counter_id(record->id, &counter_id);
+
+                std::cerr << "  (Dispatch_Id: " << record->dispatch_id
+                << " Counter_Id: " << counter_id.handle
+                << " Record_Id: " << record->id 
+                << " Dimensions: [";
+                //for(auto& dim : counter_dimensions(counter_id)) {
+                //    size_t pos = 0;
+                //    rocprofiler_query_record_dimension_position(record->id, dim.id, &pos);
+                //    std::cerr << "{" << dim.name << ": " << pos << "},";
+                //}
+                //std::cerr << "] ";
+                std::cerr << " Value [D]: " << record->counter_value << ")," << std::endl;
+
+                //fprintf(stderr, "counter buffer: value\n");
+            }
+        }
     }
 }
 #endif
+
+// FIXME remove me
+rocprofiler_counter_config_id_t
+build_profile_for_agent(rocprofiler_agent_id_t       agent,
+                        const std::set<std::string>& counters_to_collect)
+{
+    std::vector<rocprofiler_counter_id_t> gpu_counters;
+
+    // Iterate all the counters on the agent and store them in gpu_counters.
+    ROCPROFILER_CALL(rocprofiler_iterate_agent_supported_counters(
+                         agent,
+                         [](rocprofiler_agent_id_t,
+                            rocprofiler_counter_id_t* counters,
+                            size_t                    num_counters,
+                            void*                     user_data) {
+                             std::vector<rocprofiler_counter_id_t>* vec =
+                                 static_cast<std::vector<rocprofiler_counter_id_t>*>(user_data);
+                             for(size_t i = 0; i < num_counters; i++)
+                             {
+                                 vec->push_back(counters[i]);
+                             }
+                             return ROCPROFILER_STATUS_SUCCESS;
+                         },
+                         static_cast<void*>(&gpu_counters)),
+                     "Could not fetch supported counters");
+
+    // Find the counters we actually want to collect (i.e. those in counters_to_collect)
+    std::vector<rocprofiler_counter_id_t> collect_counters;
+    for(auto& counter : gpu_counters)
+    {
+        rocprofiler_counter_info_v0_t info;
+        ROCPROFILER_CALL(
+            rocprofiler_query_counter_info(
+                counter, ROCPROFILER_COUNTER_INFO_VERSION_0, static_cast<void*>(&info)),
+            "Could not query info for counter");
+        //std::cerr << "Counter: " << counter.handle << " " << info.name << "\n";
+        if(counters_to_collect.count(std::string(info.name)) > 0)
+        {
+            //std::clog << "Counter: " << counter.handle << " " << info.name << "\n";
+            //std::cerr << "Counter: " << counter.handle << " " << info.name << "\n";
+            collect_counters.push_back(counter);
+            //fill_dimension_cache(counter);
+        }
+    }
+
+    // Create and return the profile
+    rocprofiler_counter_config_id_t profile = {.handle = 0};
+    ROCPROFILER_CALL(rocprofiler_create_counter_config(
+                         agent, collect_counters.data(), collect_counters.size(), &profile),
+                     "Could not construct profile cfg");
+
+    return profile;
+}
+
+// /FIXME
+
+void RocprofDataSource::dispatch_callback(rocprofiler_dispatch_counting_service_data_t dispatch_data, rocprofiler_counter_config_id_t* config, rocprofiler_user_data_t* user_data, void* callback_data)
+{
+    //fprintf(stderr, "dispatch_callback\n");
+    auto agent = dispatch_data.dispatch_info.agent_id;
+    //*config = build_profile_for_agent(agent, std::set<std::string>{"TCC_HIT"});
+    //*config = build_profile_for_agent(agent, std::set<std::string>{"SALUInsts"});
+    *config = build_profile_for_agent(agent, std::set<std::string>{"VALUInsts","VALUBusy","VALUUtilization"});
+    //*config = xxx;
+}
 
 void RocprofDataSource::code_object_callback(rocprofiler_callback_tracing_record_t record, rocprofiler_user_data_t* user_data, void* callback_data)
 {
@@ -926,6 +1017,11 @@ int RocprofDataSource::toolInit(rocprofiler_client_finalize_t finialize_func, vo
                                                      apis.data(),
                                                      apis.size(),
                                                      buffer);
+
+        rocprofiler_configure_buffer_dispatch_counting_service(context,
+                                                     buffer,
+                                                     dispatch_callback,
+                                                     instance);
 
         auto client_thread = rocprofiler_callback_thread_t{};
         rocprofiler_create_callback_thread(&client_thread);
