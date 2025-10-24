@@ -137,6 +137,7 @@ void Logger::rpdflush()
     m_opTable->flush();
     m_apiTable->flush();
     m_monitorTable->flush();
+    //m_counterTable->flush();
 
     const timestamp_t cb_end_time = clocktime_ns();
     createOverheadRecord(cb_begin_time, cb_end_time, "rpdflush", "");
@@ -202,6 +203,7 @@ void Logger::init()
     m_opTable = new OpTable(filename);
     m_apiTable = new ApiTable(filename);
     m_monitorTable = new MonitorTable(filename);
+    //m_counterTable = new CounterTable(filename);
 
     // Offset primary keys so they do not collide between sessions
     sqlite3_int64 offset = m_metadataTable->sessionId() * (sqlite3_int64(1) << 32);
@@ -211,6 +213,7 @@ void Logger::init()
     m_copyApiTable->setIdOffset(offset);
     m_opTable->setIdOffset(offset);
     m_apiTable->setIdOffset(offset);
+    //m_counterTable->setIdOffset(offset);
 
     // Create one instance of each available datasource
     std::list<std::string> factories = {
@@ -291,6 +294,7 @@ void Logger::finalize()
         m_monitorTable->finalize();
         m_writeOverheadRecords = false;	// Don't make any new overhead records (api calls)
         m_apiTable->finalize();
+        //m_counterTable->finalize();
         m_stringTable->finalize();	// String table last
 
         const timestamp_t end_time = clocktime_ns();

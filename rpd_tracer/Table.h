@@ -281,3 +281,27 @@ private:
     virtual void writeRows() override;
     virtual void flushRows() override;
 };
+
+class CounterTablePrivate;
+class CounterTable: public BufferedTable
+{
+public:
+    CounterTable(const char *basefile);
+    virtual ~CounterTable();
+
+    struct row {
+        sqlite3_int64 op_id;
+        sqlite3_int64 apiName_id;
+        float value;
+    };
+
+    void insert(const row&);
+
+private:
+    CounterTablePrivate *d;
+    friend class CounterTablePrivate;
+
+    virtual void writeRows() override;
+    virtual void flushRows() override;
+};
+

@@ -13,3 +13,6 @@ CREATE VIEW copy AS SELECT B.id, pid, tid, start, end, C.string AS apiName, stre
 
 -- Async copies (op timing)
 CREATE VIEW copyop AS SELECT B.id, gpuId, queueId, sequenceId, B.start, B.end, (B.end-B.start) AS duration, stream, size, width, height, kind, dst, src, dstDevice, srcDevice, sync, pinned, E.string AS apiName FROM rocpd_api_ops A JOIN rocpd_op B ON B.id = A.op_id JOIN rocpd_copyapi C ON C.api_ptr_id = A.api_id JOIN rocpd_api D on D.id = A.api_id JOIN rocpd_string E ON E.id = D.apiName_id;
+
+-- GPU Counters
+CREATE VIEW IF NOT EXISTS counter AS SELECT A.op_id, B.string as name, A.value FROM rocpd_counter A JOIN rocpd_string B ON B.id = A.name_id;

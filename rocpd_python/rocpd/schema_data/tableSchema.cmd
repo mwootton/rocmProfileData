@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS "rocpd_api_ops" ("id" integer NOT NULL PRIMARY KEY AU
 CREATE TABLE IF NOT EXISTS "rocpd_kernelapi" ("api_ptr_id" integer NOT NULL PRIMARY KEY REFERENCES "rocpd_api" ("id") DEFERRABLE INITIALLY DEFERRED, "stream" varchar(18) NOT NULL, "gridX" integer NOT NULL, "gridY" integer NOT NULL, "gridZ" integer NOT NULL, "workgroupX" integer NOT NULL, "workgroupY" integer NOT NULL, "workgroupZ" integer NOT NULL, "groupSegmentSize" integer NOT NULL, "privateSegmentSize" integer NOT NULL, "kernelArgAddress" varchar(18) NOT NULL, "aquireFence" varchar(8) NOT NULL, "releaseFence" varchar(8) NOT NULL, "codeObject_id" integer NOT NULL REFERENCES "rocpd_kernelcodeobject" ("id") DEFERRABLE INITIALLY DEFERRED, "kernelName_id" integer NOT NULL REFERENCES "rocpd_string" ("id") DEFERRABLE INITIALLY DEFERRED);
 CREATE TABLE IF NOT EXISTS "rocpd_metadata" ("id" integer NOT NULL PRIMARY KEY AUTOINCREMENT, "tag" varchar(4096) NOT NULL, "value" varchar(4096) NOT NULL);
 CREATE TABLE IF NOT EXISTS "rocpd_monitor" ("id" integer NOT NULL PRIMARY KEY AUTOINCREMENT, "deviceType" varchar(16) NOT NULL, "deviceId" integer NOT NULL, "monitorType" varchar(16) NOT NULL, "start" integer NOT NULL, "end" integer NOT NULL, "value" varchar(255) NOT NULL);
+CREATE TABLE IF NOT EXISTS "rocpd_counter" ("id" integer NOT NULL PRIMARY KEY AUTOINCREMENT, "op_id" integer NOT NULL REFERENCES "rocpd_op" ("id") DEFERRABLE INITIALLY DEFERRED, "name_id" integer NOT NULL REFERENCES "rocpd_string" ("id") DEFERRABLE INITIALLY DEFERRED, "value" real NOT NULL);
 
 
 INSERT INTO "rocpd_metadata"(tag, value) VALUES ("schema_version", "2")
@@ -26,4 +27,7 @@ INSERT INTO "rocpd_metadata"(tag, value) VALUES ("schema_version", "2")
 --CREATE INDEX "rocpd_op_inputSignals_to_op_id_d34a7779" ON "rocpd_op_inputSignals" ("to_op_id");
 --CREATE INDEX "rocpd_op_description_id_c8dc8310" ON "rocpd_op" ("description_id");
 --CREATE INDEX "rocpd_op_opType_id_810aaccd" ON "rocpd_op" ("opType_id");
+
+--CREATE INDEX "rocpd_counter_name_id_92b0ed0c" ON "rocpd_counter" ("name_id");
+--CREATE INDEX "rocpd_counter_op_id_0b4d4b59" ON "rocpd_counter" ("op_id");
 

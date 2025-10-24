@@ -93,11 +93,10 @@ class CopyApi(Api):
     sync = models.BooleanField()
     pinned = models.BooleanField()
 
-class BarrierOp(Op):
-    #op = models.OneToOneField(Ops, on_delete=models.PROTECT, primary_key=True)
-    signalCount = models.IntegerField()
-    aquireFence = models.CharField(max_length=8)   #(none, agent, system)
-    releaseFence = models.CharField(max_length=8)  #(none, agent, system)
+class Counter(models.Model):
+    op = models.ForeignKey(Op, related_name='+', on_delete=models.PROTECT)
+    name = models.ForeignKey(String, related_name='+', on_delete=models.PROTECT)
+    value = models.FloatField()
 
 class Monitor(models.Model):
     class DeviceType(models.TextChoices):

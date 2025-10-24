@@ -606,7 +606,7 @@ void RocprofDataSource::buffer_callback(rocprofiler_context_id_t context, rocpro
                 // FIXME: op name hack
                 static sqlite3_int64 name_id = logger.stringTable().getOrCreate("KernelExecution");
                 sqlite3_int64 desc_id = logger.stringTable().getOrCreate(s->kernel_names.at(record->dispatch_info.kernel_id));
-
+//fprintf(stderr, "Dispatch: %ld\n", dispatch.dispatch_id);	// FIXME remove me
                 OpTable::row row; 
                 row.gpuId = s->agents.at(dispatch.agent_id.handle).logical_node_type_id;
                 row.queueId = dispatch.queue_id.handle;
@@ -710,7 +710,8 @@ void RocprofDataSource::buffer_callback(rocprofiler_context_id_t context, rocpro
                 rocprofiler_counter_id_t counter_id = {.handle = 0};
 
                 rocprofiler_query_record_counter_id(record->id, &counter_id);
-
+// FIXME remove me
+#if 0
                 std::cerr << "  (Dispatch_Id: " << record->dispatch_id
                 << " Counter_Id: " << counter_id.handle
                 << " Record_Id: " << record->id 
@@ -722,6 +723,7 @@ void RocprofDataSource::buffer_callback(rocprofiler_context_id_t context, rocpro
                 //}
                 //std::cerr << "] ";
                 std::cerr << " Value [D]: " << record->counter_value << ")," << std::endl;
+#endif
 
                 //fprintf(stderr, "counter buffer: value\n");
             }
@@ -764,7 +766,7 @@ build_profile_for_agent(rocprofiler_agent_id_t       agent,
             rocprofiler_query_counter_info(
                 counter, ROCPROFILER_COUNTER_INFO_VERSION_0, static_cast<void*>(&info)),
             "Could not query info for counter");
-        //std::cerr << "Counter: " << counter.handle << " " << info.name << "\n";
+        //std::cerr << "Counter: " << counter.handle << " " << info.name << "\n";  // FIXME remove me
         if(counters_to_collect.count(std::string(info.name)) > 0)
         {
             //std::clog << "Counter: " << counter.handle << " " << info.name << "\n";

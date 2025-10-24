@@ -45,6 +45,7 @@ public:
     CopyApiTable &copyApiTable() { return *m_copyApiTable; }
     ApiTable &apiTable() { return *m_apiTable; }
     MonitorTable &monitorTable() { return *m_monitorTable; }
+    CounterTable &counterTable() { return *m_counterTable; }
 
 
     // External control to stop/stop logging
@@ -80,6 +81,7 @@ private:
     CopyApiTable *m_copyApiTable {nullptr};
     ApiTable *m_apiTable {nullptr};
     MonitorTable *m_monitorTable {nullptr};
+    CounterTable *m_counterTable {nullptr};
 
     void init();
     void finalize();
