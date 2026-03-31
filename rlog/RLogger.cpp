@@ -121,7 +121,7 @@ void RLogger::mark(const char *domain, const char *category, const char *apiName
     for (const auto &it: d->loggers) {
        (it.first)->mark(domain, category, apiName, args);
     }
-    fprintf(stderr, "MARK\n");
+    //fprintf(stderr, "MARK\n");
 }
 
 void RLogger::rangePush(const char *domain, const char *category, const char *apiName, const char* args)
@@ -130,7 +130,7 @@ void RLogger::rangePush(const char *domain, const char *category, const char *ap
     for (const auto &it: d->loggers) {
        (it.first)->rangePush(domain, category, apiName, args);
     }
-    fprintf(stderr, "PUSH\n");
+    //fprintf(stderr, "PUSH\n");
 }
 
 void RLogger::rangePop()
@@ -139,7 +139,7 @@ void RLogger::rangePop()
     for (const auto &it: d->loggers) {
        (it.first)->rangePop();
     }
-    fprintf(stderr, "POP\n");
+    //fprintf(stderr, "POP\n");
 }
 
 void RLogger::addLogger(Logger &logger)

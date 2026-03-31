@@ -10,6 +10,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <sqlite3.h>
+
 
 typedef uint64_t timestamp_t;
 
