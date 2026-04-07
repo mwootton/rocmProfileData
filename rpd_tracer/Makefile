@@ -16,7 +16,8 @@ ifneq (,$(HIP_PATH))
         #USE_ROCPROFILER_SDK = false
         ifneq (,$(wildcard /opt/rocm/include/rocprofiler-sdk))
         ifneq ($(shell echo ${ROCM_VERSION} | cut -d. -f1), 6)
-            USE_ROCPROFILER_SDK = true
+            # Disable rocprofiler-sdk (for performance reasons)
+            #USE_ROCPROFILER_SDK = true
         endif
         endif
 
