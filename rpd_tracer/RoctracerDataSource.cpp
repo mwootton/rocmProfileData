@@ -32,6 +32,10 @@
 #include "Logger.h"
 #include "Utility.h"
 
+using rpdtracer::DataSource;
+using rpdtracer::RoctracerDataSource;
+using rpdtracer::RocmApiIdList;
+
 
 // Create a factory for the Logger to locate and use
 extern "C" {
@@ -903,6 +907,7 @@ void RoctracerDataSource::hcc_activity_callback(const char* begin, const char* e
 
 
 void RoctracerDataSource::init() {
+    createDeviceMap();
 
     // Pick some apis to ignore
     m_apiList.setInvertMode(true);  // Omit the specified api
@@ -963,7 +968,7 @@ void RoctracerDataSource::init() {
     roctracer_enable_domain_activity_expl(ACTIVITY_DOMAIN_HCC_OPS, m_hccPool);
 #endif
 
-    createDeviceMap();
+    //createDeviceMap();
     stopTracing();
 }
 

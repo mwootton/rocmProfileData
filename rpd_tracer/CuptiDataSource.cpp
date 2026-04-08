@@ -32,6 +32,10 @@
 #include "Logger.h"
 #include "Utility.h"
 
+using rpdtracer::DataSource;
+using rpdtracer::CuptiDataSource;
+using rpdtracer::CudaApiIdList;
+
 
 // Create a factory for the Logger to locate and use
 extern "C" {

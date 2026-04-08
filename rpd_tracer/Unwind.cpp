@@ -23,6 +23,10 @@
 #include <sqlite3.h>
 #include "Logger.h"
 
+namespace rpdtracer {
+    int unwind(rpdtracer::Logger &logger, const char *api, const sqlite_int64 api_id);
+}    // namespace rpdtracer
+
 #ifdef RPD_STACKFRAME_SUPPORT
 #include <cpptrace/cpptrace.hpp>
 #include <sstream>
@@ -36,7 +40,7 @@
 
 static std::once_flag registerDoubleAgain_once;
 
-int unwind(Logger &logger, const char *api, const sqlite_int64 api_id) {
+int rpdtracer::unwind(rpdtracer::Logger &logger, const char *api, const sqlite_int64 api_id) {
 
     if (!logger.writeStackFrames()) return 0;
 
@@ -90,16 +94,15 @@ int unwind(Logger &logger, const char *api, const sqlite_int64 api_id) {
         n++;
     }
 
-    std::call_once(registerDoubleAgain_once, atexit, Logger::rpdFinalize);
+    std::call_once(registerDoubleAgain_once, atexit, rpdtracer::Logger::rpdFinalize);
 
     return 0;
 }
 
 #else
 
-int unwind(Logger &logger, const char *api, const sqlite_int64 api_id) {
+int rpdtracer::unwind(rpdtracer::Logger &logger, const char *api, const sqlite_int64 api_id) {
     return 0;
 }
 
 #endif
-

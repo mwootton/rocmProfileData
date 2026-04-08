@@ -25,6 +25,9 @@
 //#include <roctracer_hip.h>
 // FIXME: make this work for cud and hip or turn into interface
 
+using rpdtracer::ApiIdList;
+
+
 ApiIdList::ApiIdList()
 : m_invert(true)
 {

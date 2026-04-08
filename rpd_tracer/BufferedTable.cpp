@@ -6,6 +6,8 @@
 
 #include <thread>
 
+using rpdtracer::BufferedTable;
+using rpdtracer::BufferedTablePrivate;
 
 class BufferedTablePrivate
 {

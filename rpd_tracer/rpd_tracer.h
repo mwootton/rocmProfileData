@@ -32,4 +32,8 @@ extern "C" {
     void rpd_rangePop();
 }
 
+namespace rpdtracer {
+
 void createOverheadRecord(uint64_t start, uint64_t end, const std::string &name, const std::string &args);
+
+}    // namespace rpdtracer

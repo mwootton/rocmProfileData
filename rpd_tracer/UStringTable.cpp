@@ -29,6 +29,9 @@
 #include "rpd_tracer.h"
 #include "Utility.h"
 
+using rpdtracer::UStringTable;
+using rpdtracer::UStringTablePrivate;
+
 
 const char *SCHEMA_USTRING = R"|(
 CREATE TEMPORARY TABLE "temp_rocpd_ustring" ("id" integer NOT NULL PRIMARY KEY AUTOINCREMENT, "string" varchar(4096) NOT NULL);
