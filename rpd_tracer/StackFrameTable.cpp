@@ -28,6 +28,9 @@
 #include "rpd_tracer.h"
 #include "Utility.h"
 
+using rpdtracer::StackFrameTable;
+using rpdtracer::StackFrameTablePrivate;
+
 
 const char *SCHEMA = R"sql(CREATE TEMPORARY TABLE "temp_rocpd_stackframe" ("id" integer NOT NULL PRIMARY KEY AUTOINCREMENT, "api_ptr_id" integer NOT NULL REFERENCES "rocpd_api" ("id") DEFERRABLE INITIALLY DEFERRED, "depth" integer NOT NULL, "name_id" integer NOT NULL REFERENCES "rocpd_string" ("id") DEFERRABLE INITIALLY DEFERRED);)sql";
 

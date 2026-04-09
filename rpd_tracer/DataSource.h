@@ -23,6 +23,8 @@
 
 //#include "Logger.h"
 
+namespace rpdtracer {
+
 class DataSource
 {
 public:
@@ -33,3 +35,5 @@ public:
     virtual void stopTracing() = 0;
     virtual void flush() = 0;
 };
+
+}    // namespace rpdtracer

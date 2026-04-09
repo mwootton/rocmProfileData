@@ -23,6 +23,10 @@
 
 #include <fmt/format.h>
 
+using rpdtracer::DbResource;
+using rpdtracer::DbResourcePrivate;
+
+
 class DbResourcePrivate
 {
 public:

@@ -32,6 +32,8 @@
 #include "DataSource.h"
 #include "ApiIdList.h"
 
+namespace rpdtracer {
+
 class CudaApiIdList : public ApiIdList
 {
 public:
@@ -63,3 +65,5 @@ private:
     static void CUPTIAPI bufferCompleted(CUcontext ctx, uint32_t streamId, uint8_t *buffer, size_t size, size_t validSize);
 
 };
+
+}    // namespace rpdtracer

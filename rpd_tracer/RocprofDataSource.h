@@ -30,6 +30,7 @@
 #include "DataSource.h"
 #include "ApiIdList.h"
 
+namespace rpdtracer {
 
 class RocprofDataSourcePrivate;
 class RocprofDataSource : public DataSource
@@ -60,3 +61,4 @@ public:
 
 };
 
+}    // namespace rpdtracer

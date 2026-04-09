@@ -36,6 +36,8 @@
 //   "normal mode": things you add() are the only things matching the filter
 //   invertMode() == true: All things match filter except what you add()
 
+namespace rpdtracer {
+
 class ApiIdList
 {
 public:
@@ -57,4 +59,6 @@ private:
   std::unordered_map<uint32_t, uint32_t> m_filter;	// apiId -> "1"
   bool m_invert;
 };
+
+}    // namespace rpdtracer
 

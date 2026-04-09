@@ -40,6 +40,11 @@
 #include "Logger.h"
 #include "Utility.h"
 
+using rpdtracer::DataSource;
+using rpdtracer::RocprofDataSource;
+using rpdtracer::RocprofDataSourcePrivate;
+//using rpdtracer::RocprofApiIdList;
+
 
 // Create a factory for the Logger to locate and use
 extern "C" {
@@ -83,7 +88,7 @@ namespace
                    int32_t           dereference_count,
                    void*             cb_data) -> int {
 
-                auto &crow = *(static_cast<CopyApiTable::row*>(cb_data));
+                auto &crow = *(static_cast<rpdtracer::CopyApiTable::row*>(cb_data));
                 if (strcmp("dst", arg_name) == 0) {
                     crow.dst = std::string(arg_value_str);
                 }
@@ -116,7 +121,7 @@ namespace
                    void*             cb_data) -> int {
 
                 if (strcmp("stream", arg_name) == 0) {
-                    auto &krow = *(static_cast<KernelApiTable::row*>(cb_data));
+                    auto &krow = *(static_cast<rpdtracer::KernelApiTable::row*>(cb_data));
                     krow.stream = std::string(arg_value_str);
                 }
                 return 0;
@@ -220,7 +225,7 @@ namespace
        return false;
     }
 
-    class RocprofApiIdList : public ApiIdList
+    class RocprofApiIdList : public rpdtracer::ApiIdList
     {
     public:
         RocprofApiIdList(buffer_name_info &names);
