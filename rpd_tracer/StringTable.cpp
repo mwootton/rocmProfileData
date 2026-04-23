@@ -97,7 +97,7 @@ sqlite3_int64 StringTable::getOrCreate(const std::string &key)
 void StringTablePrivate::insert(StringTable::row &row)
 {
     std::unique_lock<std::mutex> lock(p->m_mutex);
-    if (p->m_head - p->m_tail >= StringTablePrivate::BUFFERSIZE) {
+    while (p->m_head - p->m_tail >= StringTablePrivate::BUFFERSIZE) {
         // buffer is full; insert in-line or wait
         //const timestamp_t start = util::HsaTimer::clocktime_ns(util::HsaTimer::TIME_ID_CLOCK_MONOTONIC);
 	//FIXME

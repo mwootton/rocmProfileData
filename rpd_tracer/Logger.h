@@ -21,6 +21,7 @@
 ********************************************************************************/
 #pragma once
 
+#include <atomic>
 #include <string>
 #include <mutex>
 #include <deque>
@@ -91,10 +92,10 @@ private:
     void finalize();
 
     std::string m_filename;
-    bool m_writeOverheadRecords {true};
+    std::atomic<bool> m_writeOverheadRecords {true};
     bool m_writeStackFrames {false};
 
-    bool m_done {false};
+    std::atomic<bool> m_done {false};
     int m_period{1};
     std::thread *m_worker {nullptr};
     void autoflushWorker();

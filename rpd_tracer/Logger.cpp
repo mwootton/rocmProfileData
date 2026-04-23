@@ -100,6 +100,9 @@ void Logger::rpdInit() {
     }
     if (doInit)
         Logger::singleton();
+
+    // Indicate the tracer loaded.  Used for snooping without loading
+    setenv("RPDT_LOADED", "1", 1);
 }
 
 void Logger::rpdFinalize() {
@@ -134,7 +137,6 @@ void Logger::rpdstop()
 
 void Logger::rpdflush()
 {
-    std::unique_lock<std::mutex> lock(m_activeMutex);
     //fprintf(stderr, "rpd_tracer: FLUSH\n");
     const timestamp_t cb_begin_time = clocktime_ns();
 
@@ -202,9 +204,6 @@ void Logger::init()
         filename = "./trace.rpd";
     m_filename = filename;
 
-    // Indicate the tracer loaded.  Used for snooping without loading
-    setenv("RPDT_LOADED", "1", 1);
-
     // Create table recorders
 
     m_metadataTable = new MetadataTable(filename);
@@ -236,14 +235,11 @@ void Logger::init()
         "RocmSmiDataSourceFactory"
         };
 
-    void (*dl) = dlopen("librpd_tracer.so", RTLD_LAZY);
-    if (dl) {
-        for (auto it = factories.begin(); it != factories.end(); ++it) {
-            DataSource* (*func) (void) = (DataSource* (*)()) dlsym(dl, (*it).c_str());
-            if (func) {
-                m_sources.push_back(func());
-                //fprintf(stderr, "Using: %s\n", (*it).c_str());
-            }
+    for (auto it = factories.begin(); it != factories.end(); ++it) {
+        DataSource* (*func) (void) = (DataSource* (*)()) dlsym(RTLD_DEFAULT, (*it).c_str());
+        if (func) {
+            m_sources.push_back(func());
+            //fprintf(stderr, "Using: %s\n", (*it).c_str());
         }
     }
 
@@ -300,7 +296,7 @@ void Logger::finalize()
 
         m_done = true;
         if (m_worker != nullptr)
-            m_worker->join();	// deadlock in here.  try skipping if needed
+            m_worker->join();
 
         for (auto it = m_sources.begin(); it != m_sources.end(); ++it)
             (*it)->stopTracing();
@@ -329,7 +325,7 @@ void Logger::autoflushWorker()
 {
     while (m_done == false) {
         rpdflush();
-        usleep(1000000);
+        usleep(m_period);
     }
 }
 
