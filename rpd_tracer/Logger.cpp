@@ -100,6 +100,9 @@ void Logger::rpdInit() {
     }
     if (doInit)
         Logger::singleton();
+
+    // Indicate the tracer loaded.  Used for snooping without loading
+    setenv("RPDT_LOADED", "1", 1);
 }
 
 void Logger::rpdFinalize() {
@@ -200,9 +203,6 @@ void Logger::init()
     if (filename == NULL)
         filename = "./trace.rpd";
     m_filename = filename;
-
-    // Indicate the tracer loaded.  Used for snooping without loading
-    setenv("RPDT_LOADED", "1", 1);
 
     // Create table recorders
 
