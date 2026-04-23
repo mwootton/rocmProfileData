@@ -17,7 +17,7 @@ ifneq (,$(HIP_PATH))
         ifneq (,$(wildcard /opt/rocm/include/rocprofiler-sdk))
         ifneq ($(shell echo ${ROCM_VERSION} | cut -d. -f1), 6)
             # Disable rocprofiler-sdk (for performance reasons)
-            #USE_ROCPROFILER_SDK = true
+            # USE_ROCPROFILER_SDK = true
         endif
         endif
 
@@ -84,7 +84,7 @@ install: all
 	cp $(RPD_MAIN)  $(PREFIX)/lib/
 	cp $(RPD_SCRIPT) $(PREFIX)/bin/
 	ldconfig
-	$(PYTHON) setup.py install
+	$(PIP) install .
 
 .PHONY: uninstall
 uninstall:
