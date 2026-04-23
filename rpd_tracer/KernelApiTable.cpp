@@ -28,6 +28,9 @@
 #include "rpd_tracer.h"
 #include "Utility.h"
 
+using rpdtracer::KernelApiTable;
+using rpdtracer::KernelApiTablePrivate;
+
 
 const char *SCHEMA_KERNELAPI = R"|(
 CREATE TEMPORARY TABLE  "temp_rocpd_kernelapi" ("api_ptr_id" bigint NOT NULL PRIMARY KEY REFERENCES "rocpd_api" ("id") DEFERRABLE INITIALLY DEFERRED, "stream" varchar(18) NOT NULL, "gridX" integer NOT NULL, "gridY" integer NOT NULL, "gridZ" integer NOT NULL, "workgroupX" integer NOT NULL, "workgroupY" integer NOT NULL, "workgroupZ" integer NOT NULL, "groupSegmentSize" integer NOT NULL, "privateSegmentSize" integer NOT NULL, "kernelName_id" bigint NOT NULL REFERENCES "rocpd_string" ("id") DEFERRABLE INITIALLY DEFERRED)

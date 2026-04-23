@@ -29,6 +29,9 @@
 #include "rpd_tracer.h"
 #include "Utility.h"
 
+using rpdtracer::UStringTable;
+using rpdtracer::UStringTablePrivate;
+
 
 const char *SCHEMA_USTRING = R"|(
 CREATE TEMPORARY TABLE "temp_rocpd_ustring" ("id" integer NOT NULL PRIMARY KEY AUTOINCREMENT, "string" varchar(4096) NOT NULL);
@@ -91,7 +94,7 @@ sqlite3_int64 UStringTable::create(const std::string &key)
 void UStringTablePrivate::insert(UStringTable::row &row)
 {
     std::unique_lock<std::mutex> lock(p->m_mutex);
-    if (p->m_head - p->m_tail >= UStringTablePrivate::BUFFERSIZE) {
+    while (p->m_head - p->m_tail >= UStringTablePrivate::BUFFERSIZE) {
         // buffer is full; insert in-line or wait
         const timestamp_t start = clocktime_ns();
         p->m_wait.notify_one();  // make sure working is running

@@ -4,6 +4,8 @@
 #include "Table.h"
 #include "Utility.h"
 
+using rpdtracer::Table;
+
 int busy_handler(void *data, int count)
 {
     count = (count < 9) ? count : 8;

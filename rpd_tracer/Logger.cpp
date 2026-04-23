@@ -28,6 +28,7 @@
 
 #include "Utility.h"
 
+using rpdtracer::Logger;
 
 #if 0
 static void rpdInit() __attribute__((constructor));
@@ -74,11 +75,14 @@ void rpd_rangePop()
 
 // GFH - This mirrors the function in the pre-refactor code.  Allows both code paths to compile.
 //   See table classes for users.  Todo: build a proper threaded record writer
-void createOverheadRecord(uint64_t start, uint64_t end, const std::string &name, const std::string &args)
+void rpdtracer::createOverheadRecord(uint64_t start, uint64_t end, const std::string &name, const std::string &args)
 {
     Logger::singleton().createOverheadRecord(start, end, name, args);
 }
 
+namespace {
+    bool loggerInitialized { false };
+}
 
 Logger& Logger::singleton()
 {
@@ -87,11 +91,23 @@ Logger& Logger::singleton()
 }
 
 void Logger::rpdInit() {
-    Logger::singleton().init();
+    bool doInit = true;
+    char *val = getenv("RPDT_DELAYINIT");
+    if (val != NULL) {
+        int delayinit = atoi(val);
+        if (delayinit != 0)
+            doInit = false;
+    }
+    if (doInit)
+        Logger::singleton();
+
+    // Indicate the tracer loaded.  Used for snooping without loading
+    setenv("RPDT_LOADED", "1", 1);
 }
 
 void Logger::rpdFinalize() {
-    Logger::singleton().finalize();
+    if (loggerInitialized)
+        Logger::singleton().finalize();
 }
 
 
@@ -121,7 +137,6 @@ void Logger::rpdstop()
 
 void Logger::rpdflush()
 {
-    std::unique_lock<std::mutex> lock(m_activeMutex);
     //fprintf(stderr, "rpd_tracer: FLUSH\n");
     const timestamp_t cb_begin_time = clocktime_ns();
 
@@ -189,9 +204,6 @@ void Logger::init()
         filename = "./trace.rpd";
     m_filename = filename;
 
-    // Indicate the tracer loaded.  Used for snooping without loading
-    setenv("RPDT_LOADED", "1", 1);
-
     // Create table recorders
 
     m_metadataTable = new MetadataTable(filename);
@@ -224,14 +236,11 @@ void Logger::init()
         "RocmSmiDataSourceFactory"
         };
 
-    void (*dl) = dlopen("librpd_tracer.so", RTLD_LAZY);
-    if (dl) {
-        for (auto it = factories.begin(); it != factories.end(); ++it) {
-            DataSource* (*func) (void) = (DataSource* (*)()) dlsym(dl, (*it).c_str());
-            if (func) {
-                m_sources.push_back(func());
-                //fprintf(stderr, "Using: %s\n", (*it).c_str());
-            }
+    for (auto it = factories.begin(); it != factories.end(); ++it) {
+        DataSource* (*func) (void) = (DataSource* (*)()) dlsym(RTLD_DEFAULT, (*it).c_str());
+        if (func) {
+            m_sources.push_back(func());
+            //fprintf(stderr, "Using: %s\n", (*it).c_str());
         }
     }
 
@@ -273,6 +282,8 @@ void Logger::init()
         int val = atoi(stackframe);
         m_writeStackFrames = (val != 0);
     }
+
+    loggerInitialized = true;  // detect lazy init
 }
 
 static bool doFinalize = true;
@@ -286,7 +297,7 @@ void Logger::finalize()
 
         m_done = true;
         if (m_worker != nullptr)
-            m_worker->join();	// deadlock in here.  try skipping if needed
+            m_worker->join();
 
         {
             std::unique_lock<std::mutex> lock(m_activeMutex);
@@ -320,7 +331,7 @@ void Logger::autoflushWorker()
 {
     while (m_done == false) {
         rpdflush();
-        usleep(1000000);
+        usleep(m_period);
     }
 }
 

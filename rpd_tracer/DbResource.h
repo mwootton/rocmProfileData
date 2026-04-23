@@ -6,6 +6,8 @@
 #include <sqlite3.h>
 #include <string>
 
+namespace rpdtracer {
+
 class DbResourcePrivate;
 class DbResource
 {
@@ -23,3 +25,5 @@ private:
     DbResourcePrivate *d;
     friend class DbResourcePrivate;
 };
+
+}    // namespace rpdtracer

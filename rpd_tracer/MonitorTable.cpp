@@ -29,6 +29,9 @@
 #include "rpd_tracer.h"
 #include "Utility.h"
 
+using rpdtracer::MonitorTable;
+using rpdtracer::MonitorTablePrivate;
+
 
 const char *SCHEMA_MONITOR = "CREATE TEMPORARY TABLE \"temp_rocpd_monitor\" (\"id\" integer NOT NULL PRIMARY KEY AUTOINCREMENT, \"deviceType\" varchar(16) NOT NULL, \"deviceId\" integer NOT NULL, \"monitorType\" varchar(16) NOT NULL, \"start\" integer NOT NULL, \"end\" integer NOT NULL, \"value\" varchar(255) NOT NULL)";
 

@@ -8,6 +8,8 @@
 #include <mutex>
 #include <condition_variable>
 
+namespace rpdtracer {
+
 class Table
 {
 public:
@@ -330,3 +332,5 @@ private:
     virtual void writeRows() override;
     virtual void flushRows() override;
 };
+
+}    // namespace rpdtracer

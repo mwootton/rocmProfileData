@@ -40,6 +40,7 @@ fi
 
 export RPDT_FILENAME=${OUTPUT_FILE}
 export RPDT_AUTOSTART=0
+export RPDT_DELAYINIT=1
 
 # Work around past poor planning
 USELIBS=librpd_tracer.so

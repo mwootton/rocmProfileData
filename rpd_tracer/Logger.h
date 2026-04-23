@@ -21,6 +21,7 @@
 ********************************************************************************/
 #pragma once
 
+#include <atomic>
 #include <string>
 #include <mutex>
 #include <deque>
@@ -29,12 +30,14 @@
 #include "Table.h"
 #include "DataSource.h"
 
+namespace rpdtracer {
+
 const sqlite_int64 EMPTY_STRING_ID = 1;
 
 class Logger
 {
 public:
-    //Logger();
+    Logger() { init(); }
     static Logger& singleton();
 
     // Table writer classes.  Used directly by DataSources
@@ -89,11 +92,13 @@ private:
     void finalize();
 
     std::string m_filename;
-    bool m_writeOverheadRecords {true};
+    std::atomic<bool> m_writeOverheadRecords {true};
     bool m_writeStackFrames {false};
 
-    bool m_done {false};
+    std::atomic<bool> m_done {false};
     int m_period{1};
     std::thread *m_worker {nullptr};
     void autoflushWorker();
 };
+
+}    // namespace rpdtracer

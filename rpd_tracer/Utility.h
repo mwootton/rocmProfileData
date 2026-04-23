@@ -12,6 +12,7 @@
 
 #include <sqlite3.h>
 
+namespace rpdtracer {
 
 typedef uint64_t timestamp_t;
 
@@ -49,3 +50,5 @@ void createOverheadRecord(uint64_t start, uint64_t end, const std::string &name,
 
 class Logger;
 int unwind(Logger &logger, const char *api, const sqlite_int64 api_id);
+
+}    // namespace rpdtracer
