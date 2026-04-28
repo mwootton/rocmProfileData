@@ -21,7 +21,7 @@
 ********************************************************************************/
 #pragma once
 
-#include <roctracer.h>
+#include <roctracer/roctracer.h>
 
 #include <string>
 #include <cstddef>

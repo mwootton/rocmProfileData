@@ -17,7 +17,7 @@ ifneq (,$(HIP_PATH))
         ifneq (,$(wildcard $(HIP_PATH)/include/rocprofiler-sdk))
         ifneq ($(shell echo ${ROCM_VERSION} | cut -d. -f1), 6)
             # Disable rocprofiler-sdk (for performance reasons)
-            USE_ROCPROFILER_SDK = true
+            #USE_ROCPROFILER_SDK = true
         endif
         endif
 
@@ -27,9 +27,9 @@ ifneq (,$(HIP_PATH))
 		RPD_SRCS += RocprofDataSource.cpp
         else
                 $(info Building with roctracer)
-		RPD_LIBS += -lroctracer64 -lroctx64
-		RPD_SRCS += RoctracerDataSource.cpp
-		RPD_INCLUDES += -I$(HIP_PATH)/include/roctracer
+		#RPD_LIBS += -lroctracer64 -lroctx64
+		#RPD_SRCS += RoctracerDataSource.cpp
+		#RPD_INCLUDES += -I$(HIP_PATH)/include/roctracer
         endif
 
         RPD_LIBS += -L$(HIP_PATH)/lib
@@ -38,6 +38,11 @@ ifneq (,$(HIP_PATH))
         RPD_INCLUDES += -D__HIP_PLATFORM_AMD__
         RPD_INCLUDES += -I$(HIP_PATH)/include -I$(HIP_PATH)/include/hsa
         RPD_INCLUDES += -Ijson/include
+endif
+
+ifneq (,$(wildcard $(HIP_PATH)/include/hip/amd_detail/hip_profiler_ext.h))
+        $(info Building with ClrDataSource)
+        RPD_SRCS += ClrDataSource.cpp
 endif
 
 ifneq ($(CUDA_PATH),)
