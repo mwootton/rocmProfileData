@@ -30,8 +30,8 @@
 #include "Utility.h"
 
 using rpdtracer::ApiTable;
-using rpdtracer::ApiTablePrivate;
 
+namespace rpdtracer {
 
 const char *SCHEMA_API = R"|(
 CREATE TEMPORARY TABLE "temp_rocpd_api" ("id" integer NOT NULL PRIMARY KEY AUTOINCREMENT, "pid" integer NOT NULL, "tid" integer NOT NULL, "start" integer NOT NULL, "end" integer NOT NULL, "apiName_id" bigint NOT NULL REFERENCES "rocpd_string" ("id") DEFERRABLE INITIALLY DEFERRED, "category_id" bigint NOT NULL REFERENCES "rocpd_string" ("id") DEFERRABLE INITIALLY DEFERRED, "domain_id" bigint NOT NULL REFERENCES "rocpd_string" ("id") DEFERRABLE INITIALLY DEFERRED, "args_id" bigint NOT NULL REFERENCES "rocpd_ustring" ("id") DEFERRABLE INITIALLY DEFERRED)
@@ -274,3 +274,5 @@ void ApiTable::writeRows()
     std::snprintf(buff, 4096, "count=%d | remaining=%d", end - start + 1, m_head - m_tail);
     createOverheadRecord(cb_begin_time, cb_end_time, "ApiTable::writeRows", buff);
 }
+
+}  // namespace rpdtracer

@@ -30,8 +30,8 @@
 #include "Utility.h"
 
 using rpdtracer::MonitorTable;
-using rpdtracer::MonitorTablePrivate;
 
+namespace rpdtracer {
 
 const char *SCHEMA_MONITOR = "CREATE TEMPORARY TABLE \"temp_rocpd_monitor\" (\"id\" integer NOT NULL PRIMARY KEY AUTOINCREMENT, \"deviceType\" varchar(16) NOT NULL, \"deviceId\" integer NOT NULL, \"monitorType\" varchar(16) NOT NULL, \"start\" integer NOT NULL, \"end\" integer NOT NULL, \"value\" varchar(255) NOT NULL)";
 
@@ -190,3 +190,5 @@ void MonitorTable::writeRows()
     std::snprintf(buff, 4096, "count=%d | remaining=%d", end - start + 1, m_head - m_tail);
     createOverheadRecord(cb_begin_time, cb_end_time, "MonitorTable::writeRows", buff);
 }
+
+}  // namespace rpdtracer
