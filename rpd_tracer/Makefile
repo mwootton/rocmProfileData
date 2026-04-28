@@ -1,11 +1,11 @@
 
 PREFIX = /usr/local
 
-HIP_PATH ?= $(wildcard /opt/rocm/)
+HIP_PATH ?= $(or $(wildcard /opt/rocm/),$(wildcard /opt/venv/lib/python3.12/site-packages/_rocm_sdk_devel))
 CUDA_PATH ?= $(wildcard /usr/local/cuda/)
 CPPTRACE_INCLUDE_PATH ?= $(wildcard ../cpptrace_install/include)
 
-ROCM_VERSION ?= $(shell cat /opt/rocm/.info/version)
+ROCM_VERSION ?= $(shell cat $(HIP_PATH)/.info/version)
 
 RPD_LIBS = -lsqlite3 -lfmt
 RPD_INCLUDES =
@@ -14,10 +14,10 @@ RPD_SRCS = Table.cpp BufferedTable.cpp OpTable.cpp KernelApiTable.cpp CopyApiTab
 ifneq (,$(HIP_PATH))
         $(info rocm_version is ${ROCM_VERSION})
         #USE_ROCPROFILER_SDK = false
-        ifneq (,$(wildcard /opt/rocm/include/rocprofiler-sdk))
+        ifneq (,$(wildcard $(HIP_PATH)/include/rocprofiler-sdk))
         ifneq ($(shell echo ${ROCM_VERSION} | cut -d. -f1), 6)
             # Disable rocprofiler-sdk (for performance reasons)
-            # USE_ROCPROFILER_SDK = true
+            USE_ROCPROFILER_SDK = true
         endif
         endif
 
@@ -29,14 +29,14 @@ ifneq (,$(HIP_PATH))
                 $(info Building with roctracer)
 		RPD_LIBS += -lroctracer64 -lroctx64
 		RPD_SRCS += RoctracerDataSource.cpp
-		RPD_INCLUDES += -I/opt/rocm/include/roctracer
+		RPD_INCLUDES += -I$(HIP_PATH)/include/roctracer
         endif
 
-        RPD_LIBS += -L/opt/rocm/lib
+        RPD_LIBS += -L$(HIP_PATH)/lib
         RPD_LIBS += -lamdhip64 #-lrocm_smi64
 
         RPD_INCLUDES += -D__HIP_PLATFORM_AMD__
-        RPD_INCLUDES += -I/opt/rocm/include -I/opt/rocm/include/hsa
+        RPD_INCLUDES += -I$(HIP_PATH)/include -I$(HIP_PATH)/include/hsa
         RPD_INCLUDES += -Ijson/include
 endif
 
