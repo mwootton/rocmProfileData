@@ -7,7 +7,8 @@
 #include <thread>
 
 using rpdtracer::BufferedTable;
-using rpdtracer::BufferedTablePrivate;
+
+namespace rpdtracer {
 
 class BufferedTablePrivate
 {
@@ -98,3 +99,4 @@ void BufferedTablePrivate::work()
     }
 }
 
+}  // namespace rpdtracer

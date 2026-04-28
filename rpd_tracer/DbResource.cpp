@@ -24,8 +24,8 @@
 #include <fmt/format.h>
 
 using rpdtracer::DbResource;
-using rpdtracer::DbResourcePrivate;
 
+namespace rpdtracer {
 
 class DbResourcePrivate
 {
@@ -114,3 +114,5 @@ bool DbResource::isLocked()
 {
     return d->locked;
 }
+
+}  // namespace rpdtracer

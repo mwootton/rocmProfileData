@@ -42,7 +42,6 @@
 
 using rpdtracer::DataSource;
 using rpdtracer::RocprofDataSource;
-using rpdtracer::RocprofDataSourcePrivate;
 //using rpdtracer::RocprofApiIdList;
 
 
@@ -282,6 +281,8 @@ RocprofDataSourceShared &RocprofDataSourceShared::singleton()
 }
 
 
+
+namespace rpdtracer {
 
 class RocprofDataSourcePrivate
 {
@@ -984,6 +985,9 @@ void RocprofDataSource::toolFinialize(void* tool_data)
     }
 }
 
+} // namespace rpdtracer
+
+namespace {
 
 RocprofApiIdList::RocprofApiIdList(buffer_name_info &names)
 : m_nameMap()
@@ -1013,3 +1017,5 @@ std::vector<rocprofiler_tracing_operation_t> RocprofApiIdList::allEnabled()
     }
     return oplist;
 }
+
+} // anonymous namespace

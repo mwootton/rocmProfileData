@@ -30,8 +30,8 @@
 #include "Utility.h"
 
 using rpdtracer::OpTable;
-using rpdtracer::OpTablePrivate;
 
+namespace rpdtracer {
 
 const char *SCHEMA_OP = R"|(
 CREATE TEMPORARY TABLE "temp_rocpd_op" ("id" integer NOT NULL PRIMARY KEY AUTOINCREMENT, "gpuId" integer NOT NULL, "queueId" integer NOT NULL, "sequenceId" integer NOT NULL, "start" integer NOT NULL, "end" integer NOT NULL, "description_id" bigint NOT NULL REFERENCES "rocpd_string" ("id") DEFERRABLE INITIALLY DEFERRED, "opType_id" bigint NOT NULL REFERENCES "rocpd_string" ("id") DEFERRABLE INITIALLY DEFERRED);
@@ -184,3 +184,5 @@ void OpTable::writeRows()
     std::snprintf(buff, 4096, "count=%d | remaining=%d", end - start + 1, m_head - m_tail);
     createOverheadRecord(cb_begin_time, cb_end_time, "OpTable::writeRows", buff);
 }
+
+}  // namespace rpdtracer

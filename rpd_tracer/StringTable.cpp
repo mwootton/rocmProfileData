@@ -30,8 +30,8 @@
 #include "Utility.h"
 
 using rpdtracer::StringTable;
-using rpdtracer::StringTablePrivate;
 
+namespace rpdtracer {
 
 const char *SCHEMA_STRING = "CREATE TEMPORARY TABLE \"temp_rocpd_string\" (\"id\" integer NOT NULL PRIMARY KEY AUTOINCREMENT, \"string\" varchar(4096) NOT NULL)";
 
@@ -180,3 +180,5 @@ void StringTable::writeRows()
     }
 #endif
 }
+
+}  // namespace rpdtracer

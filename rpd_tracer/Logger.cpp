@@ -145,6 +145,7 @@ void Logger::rpdflush()
             (*it)->flush();
 
     m_stringTable->flush();
+    m_ustringTable->flush();
     m_kernelApiTable->flush();
     m_copyApiTable->flush();
     m_opTable->flush();

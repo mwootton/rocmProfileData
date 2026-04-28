@@ -29,8 +29,8 @@
 #include "Utility.h"
 
 using rpdtracer::CopyApiTable;
-using rpdtracer::CopyApiTablePrivate;
 
+namespace rpdtracer {
 
 const char *SCHEMA_COPYAPI = "CREATE TEMPORARY TABLE \"temp_rocpd_copyapi\" (\"api_ptr_id\" integer NOT NULL PRIMARY KEY REFERENCES \"rocpd_api\" (\"id\") DEFERRABLE INITIALLY DEFERRED, \"stream\" varchar(18) NOT NULL, \"size\" integer NOT NULL, \"width\" integer NOT NULL, \"height\" integer NOT NULL, \"kind\" integer NOT NULL, \"dst\" varchar(18) NOT NULL, \"src\" varchar(18) NOT NULL, \"dstDevice\" integer NOT NULL, \"srcDevice\" integer NOT NULL, \"sync\" bool NOT NULL, \"pinned\" bool NOT NULL);";
 
@@ -160,3 +160,5 @@ void CopyApiTable::writeRows()
     std::snprintf(buff, 4096, "count=%d | remaining=%d", end - start + 1, m_head - m_tail);
     createOverheadRecord(cb_begin_time, cb_end_time, "CopyApiTable::writeRows", buff);
 }
+
+}  // namespace rpdtracer

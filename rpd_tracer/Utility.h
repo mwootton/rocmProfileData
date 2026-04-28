@@ -9,6 +9,7 @@
 #include <string>
 #include <cstddef>
 #include <cstdint>
+#include <sqlite3.h>
 
 namespace rpdtracer {
 
