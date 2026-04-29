@@ -6,6 +6,8 @@
 #include "DataSource.h"
 
 #include <cstdint>
+#include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace rpdtracer {
@@ -20,6 +22,25 @@ public:
     void flush() override;
 
 private:
+    class ApiStringList
+    {
+    public:
+        ApiStringList() : m_invert(true) {}
+        bool invertMode() { return m_invert; }
+        void setInvertMode(bool invert) { m_invert = invert; }
+        void add(const std::string &apiName) { m_filter.insert(apiName); }
+        void remove(const std::string &apiName) { m_filter.erase(apiName); }
+        bool loadUserPrefs() { return false; }
+        bool contains(const std::string &apiName)
+        {
+            return (m_filter.find(apiName) != m_filter.end()) ? !m_invert : m_invert;
+        }
+    private:
+        std::unordered_set<std::string> m_filter;
+        bool m_invert;
+    };
+
+    ApiStringList m_apiList;
     std::vector<uint64_t> m_startIds;
     std::vector<uint64_t> m_endIds;
     size_t m_processedCount {0};

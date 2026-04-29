@@ -28,6 +28,20 @@ static std::once_flag register_once;
 
 void ClrDataSource::init()
 {
+    m_apiList.setInvertMode(true);  // Omit the specified api
+    m_apiList.add("hipGetDevice");
+    m_apiList.add("hipSetDevice");
+    m_apiList.add("hipGetLastError");
+    m_apiList.add("__hipPushCallConfiguration");
+    m_apiList.add("__hipPopCallConfiguration");
+    m_apiList.add("hipCtxSetCurrent");
+    m_apiList.add("hipGetDevicePropertiesR0600");
+    m_apiList.add("hipGetDeviceCount");
+    m_apiList.add("hipDeviceGetAttribute");
+    m_apiList.add("hipRuntimeGetVersion");
+    m_apiList.add("hipPeekAtLastError");
+    m_apiList.add("hipModuleGetFunction");
+    m_apiList.loadUserPrefs();
 }
 
 void ClrDataSource::end()
@@ -60,6 +74,8 @@ void ClrDataSource::stopTracing()
 void ClrDataSource::flush()
 {
     fprintf(stderr, "ClrDataSource::flush()\n");
+    const timestamp_t cb_begin_time = clocktime_ns();
+
     const HipApiRecordExt* const* chunks;
     size_t chunk_count, chunk_size, total_count;
     (void)hipProfilerGetRecordsExt(&chunks, &chunk_count, &chunk_size, &total_count);
@@ -76,6 +92,8 @@ void ClrDataSource::flush()
                    ? total_count - c * chunk_size : chunk_size;
         for (size_t i = (c == start_chunk ? start_index : 0); i < n; ++i) {
             const HipApiRecordExt* r = &chunks[c][i];
+            if (!m_apiList.contains(r->api_name))
+                continue;
             ApiTable::row row;
             row.pid = GetPid();
             row.tid = static_cast<int>(static_cast<sqlite3_int64>(r->thread_id)); // FIXME need OS tid
@@ -148,8 +166,13 @@ void ClrDataSource::flush()
             }
         }
     }
+    size_t incremental_count = total_count - m_processedCount;
     m_processedCount = total_count;
-    fprintf(stderr, "ClrDataSource::flush() %lu\n", total_count);
+
+    const timestamp_t cb_end_time = clocktime_ns();
+    char buff[4096];
+    std::snprintf(buff, 4096, "count=%lu | total=%lu", incremental_count, total_count);
+    logger.createOverheadRecord(cb_begin_time, cb_end_time, "ClrDataSource::flush", buff);
 }
 
 }    // namespace rpdtracer
