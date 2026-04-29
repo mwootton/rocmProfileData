@@ -51,15 +51,13 @@ void ClrDataSource::end()
 
 void ClrDataSource::startTracing()
 {
-    fprintf(stderr, "ClrDataSource::startTracing()\n");
     // Work around teething bug
     hipDeviceProp_t devProp;
     (void)hipGetDeviceProperties(&devProp, 0);
 
     uint64_t startId;
     (void)hipProfilerEnableExt(&startId, 0);
-    m_startIds.push_back(startId);
-    fprintf(stderr, "ClrDataSource::startTracing(): %lu\n", startId);
+    m_ranges.push_back({startId, 0});
     std::call_once(register_once, atexit, Logger::rpdFinalize);
 }
 
@@ -67,13 +65,11 @@ void ClrDataSource::stopTracing()
 {
     uint64_t endId;
     (void)hipProfilerDisableExt(&endId);
-    m_endIds.push_back(endId);
-    fprintf(stderr, "ClrDataSource::stopTracing(): %lu\n", endId);
+    m_ranges.back().end = endId;
 }
 
 void ClrDataSource::flush()
 {
-    fprintf(stderr, "ClrDataSource::flush()\n");
     const timestamp_t cb_begin_time = clocktime_ns();
 
     const HipApiRecordExt* const* chunks;
@@ -87,11 +83,17 @@ void ClrDataSource::flush()
     size_t start_chunk = m_processedCount / chunk_size;
     size_t start_index = m_processedCount % chunk_size;
 
+    size_t range_idx = 0;
     for (size_t c = start_chunk; c < chunk_count; ++c) {
         size_t n = (total_count - c * chunk_size < chunk_size)
                    ? total_count - c * chunk_size : chunk_size;
         for (size_t i = (c == start_chunk ? start_index : 0); i < n; ++i) {
             const HipApiRecordExt* r = &chunks[c][i];
+            uint64_t record_id = c * chunk_size + i;
+            while (range_idx < m_ranges.size() && m_ranges[range_idx].end > 0 && record_id >= m_ranges[range_idx].end)
+                ++range_idx;
+            if (range_idx >= m_ranges.size() || record_id < m_ranges[range_idx].start)
+                continue;
             if (!m_apiList.contains(r->api_name))
                 continue;
             ApiTable::row row;
@@ -166,6 +168,8 @@ void ClrDataSource::flush()
             }
         }
     }
+    m_ranges.erase(m_ranges.begin(), m_ranges.begin() + range_idx);
+
     size_t incremental_count = total_count - m_processedCount;
     m_processedCount = total_count;
 

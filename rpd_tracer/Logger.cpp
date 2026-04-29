@@ -220,8 +220,10 @@ void Logger::rpd_rangePush(const char *domain, const char *apiName, const char* 
     row.tid = GetTid();
     row.start = clocktime_ns();
     row.end = row.start;
+    row.domain_id = m_stringTable->getOrCreate(domain);
+    row.category_id = EMPTY_STRING_ID;
     row.apiName_id = m_stringTable->getOrCreate(apiName);
-    row.args_id = m_stringTable->getOrCreate(args);
+    row.args_id = m_ustringTable->create(args);
     row.api_id = 0;
     m_apiTable->pushRoctx(row);
 }

@@ -40,9 +40,13 @@ private:
         bool m_invert;
     };
 
+    struct Range {
+        uint64_t start;
+        uint64_t end;
+    };
+
     ApiStringList m_apiList;
-    std::vector<uint64_t> m_startIds;
-    std::vector<uint64_t> m_endIds;
+    std::vector<Range> m_ranges;
     size_t m_processedCount {0};
 };
 
