@@ -21,12 +21,14 @@
 ********************************************************************************/
 #include "Logger.h"
 
+#include <algorithm>
 #include <list>
 #include <vector>
 #include <mutex>
 #include <stdio.h>
 #include <stdlib.h>
 #include <dlfcn.h>
+#include <fmt/format.h>
 
 #include "Utility.h"
 
@@ -270,6 +272,9 @@ void Logger::init()
     m_monitorTable = new MonitorTable(filename);
     m_stackFrameTable = new StackFrameTable(filename);
 
+    // Log our session and pid
+    m_metadataTable->insert("session", fmt::format("id={} pid={}", m_metadataTable->sessionId(), GetPid()));
+
     // Offset primary keys so they do not collide between sessions
     sqlite3_int64 offset = m_metadataTable->sessionId() * (sqlite3_int64(1) << 32);
     m_metadataTable->setIdOffset(offset);
@@ -283,18 +288,31 @@ void Logger::init()
 
     // Create one instance of each available datasource
     std::list<std::string> factories = {
+        "ClrDataSourceFactory",
         "RocprofDataSourceFactory",
         "RoctracerDataSourceFactory",
         "CuptiDataSourceFactory",
         "RocmSmiDataSourceFactory",
-        "ClrDataSourceFactory"
         };
 
+    std::list<std::string> rocmFactories = {
+        "RocprofDataSourceFactory",
+        "ClrDataSourceFactory",
+        "RoctracerDataSourceFactory"
+        };
+
+    bool rocmSourceAdded = false;
     for (auto it = factories.begin(); it != factories.end(); ++it) {
+        bool isRocmFactory = std::find(rocmFactories.begin(), rocmFactories.end(), *it) != rocmFactories.end();
+        if (isRocmFactory && rocmSourceAdded)
+            continue;
         DataSource* (*func) (void) = (DataSource* (*)()) dlsym(RTLD_DEFAULT, (*it).c_str());
         if (func) {
             m_sources.push_back(func());
-            //fprintf(stderr, "Using: %s\n", (*it).c_str());
+            if (isRocmFactory)
+                rocmSourceAdded = true;
+            std::string sourceName = it->substr(0, it->size() - 7);  // strip "Factory"
+            m_metadataTable->insert("process_datasource", fmt::format("pid={} source={}", GetPid(), sourceName));
         }
     }
 
