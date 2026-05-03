@@ -4,7 +4,7 @@ PREFIX = /usr/local
 HIP_PATH ?= $(or $(wildcard /opt/rocm/),$(wildcard /opt/venv/lib/python3.12/site-packages/_rocm_sdk_devel))
 CUDA_PATH ?= $(wildcard /usr/local/cuda/)
 CPPTRACE_INCLUDE_PATH ?= $(wildcard ../cpptrace_install/include)
-RLOG_PATH ?= $(wildcard ../rlog/include)
+RLOG_PATH ?= $(wildcard /usr/local/)
 
 ROCM_VERSION ?= $(shell cat $(HIP_PATH)/.info/version)
 
@@ -50,8 +50,8 @@ endif
 
 ifneq (,$(RLOG_PATH))
         $(info Building with rlog)
-        RPD_LIBS += -L/usr/local/include -lrlog
-        #RPD_INCLUDES += -I$(RLOG_PATH)
+        RPD_LIBS += -L$(RLOG_PATH)/lib -lrlog
+        RPD_INCLUDES += -I$(RLOG_PATH)/include
         RPD_SRCS += RlogDataSource.cpp
 endif
 
