@@ -1,0 +1,120 @@
+/*********************************************************************************
+* Copyright (c) 2021 - 2024 Advanced Micro Devices, Inc. All rights reserved.
+*
+* Permission is hereby granted, free of charge, to any person obtaining a copy
+* of this software and associated documentation files (the "Software"), to deal
+* in the Software without restriction, including without limitation the rights
+* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+* copies of the Software, and to permit persons to whom the Software is
+* furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in
+* all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+* THE SOFTWARE.
+********************************************************************************/
+#include "RlogDataSource.h"
+
+#include "Logger.h"
+#include "Utility.h"
+
+#include <cstdio>
+#include <fmt/format.h>
+
+#include "../rlog/RLogger.h"	// FIXME
+
+using rpdtracer::DataSource;
+using rpdtracer::RlogDataSource;
+
+
+// Create a factory for the Logger to locate and use
+extern "C" {
+    DataSource *RlogDataSourceFactory() { return new RlogDataSource(); }
+}  // extern "C"
+
+
+void RlogDataSource::init()
+{
+}
+
+void RlogDataSource::end()
+{
+}
+
+void RlogDataSource::startTracing()
+{
+    rlog::RLogger::singleton().addLogger(*this);
+}
+
+void RlogDataSource::stopTracing()
+{
+    rlog::RLogger::singleton().removeLogger(*this);
+}
+
+void RlogDataSource::flush()
+{
+}
+
+
+void RlogDataSource::mark(const char *domain, const char *category, const char *apiname, const char *args)
+{
+    rpdtracer::Logger &logger = rpdtracer::Logger::singleton();
+
+    ApiTable::row row;
+    row.pid = GetPid();
+    row.tid = GetTid();
+    row.start = clocktime_ns();
+    row.end = row.start;
+    // FIXME: possibly 'micro' cache the domain and category here.
+    // Don't search the whole pool with getOrCreate
+    row.domain_id = logger.stringTable().getOrCreate(std::string(domain));
+    row.category_id = logger.stringTable().getOrCreate(std::string(category));
+    row.apiName_id = logger.stringTable().getOrCreate(std::string(apiname));
+    row.args_id = logger.ustringTable().create(args);
+    row.api_id = 0;
+    logger.apiTable().insertRoctx(row);
+}
+
+void RlogDataSource::rangePush(const char *domain, const char *category, const char *apiname, const char *args)
+{
+    rpdtracer::Logger &logger = rpdtracer::Logger::singleton();
+
+    ApiTable::row row;
+    row.pid = GetPid();
+    row.tid = GetTid();
+    row.start = clocktime_ns();
+    row.end = row.start;
+    // FIXME: possibly 'micro' cache the domain and category here.
+    // Don't search the whole pool with getOrCreate
+    row.domain_id = logger.stringTable().getOrCreate(std::string(domain));
+    row.category_id = logger.stringTable().getOrCreate(std::string(category));
+    row.apiName_id = logger.stringTable().getOrCreate(std::string(apiname));
+    row.args_id = logger.ustringTable().create(args);
+    row.api_id = 0;
+    logger.apiTable().pushRoctx(row);
+}
+
+void RlogDataSource::rangePop()
+{
+    rpdtracer::Logger &logger = rpdtracer::Logger::singleton();
+
+    ApiTable::row row;
+    row.pid = GetPid();
+    row.tid = GetTid();
+    row.start = clocktime_ns();
+    row.end = row.start;
+    row.domain_id = EMPTY_STRING_ID;
+    row.category_id = EMPTY_STRING_ID;
+    row.apiName_id = EMPTY_STRING_ID;
+    row.args_id = EMPTY_STRING_ID;
+    row.api_id = 0;
+    logger.apiTable().popRoctx(row);
+}
+
+

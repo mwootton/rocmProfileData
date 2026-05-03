@@ -11,6 +11,8 @@
 #include <cstdint>
 #include <sqlite3.h>
 
+#include <sqlite3.h>
+
 namespace rpdtracer {
 
 typedef uint64_t timestamp_t;
