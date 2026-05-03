@@ -6,6 +6,7 @@
 #include "DataSource.h"
 
 #include <cstdint>
+#include <mutex>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -45,6 +46,7 @@ private:
         uint64_t end;
     };
 
+    std::mutex m_mutex;
     ApiStringList m_apiList;
     std::vector<Range> m_ranges;
     size_t m_processedCount {0};

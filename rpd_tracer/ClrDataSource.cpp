@@ -57,7 +57,10 @@ void ClrDataSource::startTracing()
 
     uint64_t startId;
     (void)hipProfilerEnableExt(&startId, 0);
-    m_ranges.push_back({startId, 0});
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_ranges.push_back({startId, 0});
+    }
     std::call_once(register_once, atexit, Logger::rpdFinalize);
 }
 
@@ -65,6 +68,7 @@ void ClrDataSource::stopTracing()
 {
     uint64_t endId;
     (void)hipProfilerDisableExt(&endId);
+    std::lock_guard<std::mutex> lock(m_mutex);
     m_ranges.back().end = endId;
 }
 
@@ -80,8 +84,16 @@ void ClrDataSource::flush()
     static sqlite3_int64 domain_id = logger.stringTable().getOrCreate("hip");
     static uint64_t correlation_id = 0;
 
-    size_t start_chunk = m_processedCount / chunk_size;
-    size_t start_index = m_processedCount % chunk_size;
+    std::vector<Range> ranges;
+    size_t processedCount;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        ranges = m_ranges;
+        processedCount = m_processedCount;
+    }
+
+    size_t start_chunk = processedCount / chunk_size;
+    size_t start_index = processedCount % chunk_size;
 
     size_t range_idx = 0;
     for (size_t c = start_chunk; c < chunk_count; ++c) {
@@ -90,9 +102,9 @@ void ClrDataSource::flush()
         for (size_t i = (c == start_chunk ? start_index : 0); i < n; ++i) {
             const HipApiRecordExt* r = &chunks[c][i];
             uint64_t record_id = c * chunk_size + i;
-            while (range_idx < m_ranges.size() && m_ranges[range_idx].end > 0 && record_id >= m_ranges[range_idx].end)
+            while (range_idx < ranges.size() && ranges[range_idx].end > 0 && record_id >= ranges[range_idx].end)
                 ++range_idx;
-            if (range_idx >= m_ranges.size() || record_id < m_ranges[range_idx].start)
+            if (range_idx >= ranges.size() || record_id < ranges[range_idx].start)
                 continue;
             if (!m_apiList.contains(r->api_name))
                 continue;
@@ -168,10 +180,12 @@ void ClrDataSource::flush()
             }
         }
     }
-    m_ranges.erase(m_ranges.begin(), m_ranges.begin() + range_idx);
-
-    size_t incremental_count = total_count - m_processedCount;
-    m_processedCount = total_count;
+    size_t incremental_count = total_count - processedCount;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_ranges.erase(m_ranges.begin(), m_ranges.begin() + range_idx);
+        m_processedCount = total_count;
+    }
 
     const timestamp_t cb_end_time = clocktime_ns();
     char buff[4096];
