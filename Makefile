@@ -1,7 +1,7 @@
 PYTHON ?= python3
 
 .PHONY:
-all: cpptrace rpd rocpd remote
+all: cpptrace rlog rpd rocpd remote
 
 .PHONY: install
 install: all
@@ -16,7 +16,7 @@ uninstall:
 	$(MAKE) uninstall -C remote
 
 .PHONY: clean
-clean: cpptrace-clean
+clean: cpptrace-clean rlog-clean
 	$(MAKE) clean -C rocpd_python
 	$(MAKE) clean -C rpd_tracer
 	$(MAKE) clean -C remote
@@ -31,6 +31,18 @@ rocpd:
 remote:
 	$(MAKE) -C remote 
 .PHONY: cpptrace
+
+RLOG_CMAKE?= $(wildcard rlog/CMakeLists.txt)
+ifneq ($(RLOG_CMAKE),)
+.PHONY: rlog rlog-clean
+rlog:
+	cd rlog; cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local; cmake --build build; cmake --install build
+rlog-clean:
+	rm -rf rlog/build
+else
+rlog:
+rlog-clean:
+endif
 
 CPPTRACE_MAKE?= $(wildcard cpptrace/Makefile)
 ifneq ($(CPPTRACE_MAKE),)
