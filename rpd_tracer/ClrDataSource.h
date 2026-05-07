@@ -5,10 +5,13 @@
 
 #include "DataSource.h"
 
+#include <atomic>
 #include <cstdint>
 #include <string>
 #include <unordered_set>
 #include <vector>
+
+#include <hip/amd_detail/hip_profiler_ext.h>
 
 namespace rpdtracer {
 
@@ -22,6 +25,10 @@ public:
     void flush() override;
 
 private:
+    static void chunkCallback(const hipApiRecordExt* records, uint32_t count,
+                              uint32_t chunk_id, void* user_data);
+    void processRecord(const hipApiRecordExt* r);
+
     class ApiStringList
     {
     public:
@@ -47,6 +54,7 @@ private:
 
     ApiStringList m_apiList;
     std::vector<Range> m_ranges;
+    std::atomic<uint64_t> m_correlationId {0};
     size_t m_processedCount {0};
 };
 
