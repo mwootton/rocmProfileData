@@ -1,5 +1,5 @@
 /*********************************************************************************
-* Copyright (c) 2021 - 2024 Advanced Micro Devices, Inc. All rights reserved.
+* Copyright (c) 2021 - 2023 Advanced Micro Devices, Inc. All rights reserved.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -21,43 +21,28 @@
 ********************************************************************************/
 #pragma once
 
-//#include <roctracer.h>
-
-#include <string>
-
-#include <rocprofiler-sdk/registration.h>
-
 #include "DataSource.h"
-#include "ApiIdList.h"
 
 namespace rpdtracer {
 
-class RocprofDataSourcePrivate;
-class RocprofDataSource : public DataSource
+class RoctxDataSourcePrivate;
+class RoctxDataSource : public DataSource
 {
 public:
-    RocprofDataSource();
-    ~RocprofDataSource();
+    RoctxDataSource();
+    ~RoctxDataSource();
     void init() override;
     void end() override;
     void startTracing() override;
     void stopTracing() override;
     void flush() override;
 
+    static RoctxDataSource &instance();
+    RoctxDataSourcePrivate *priv() { return d; }
+
 private:
-    RocprofDataSourcePrivate *d;
-    friend class RocprofDataSourcePrivate;
-
-    //RocmApiIdList m_apiList;
-
-public:
-      static int toolInit(rocprofiler_client_finalize_t finalize_func, void* tool_data);
-      static void toolFinialize(void* tool_data);
-
-      static void api_callback(rocprofiler_callback_tracing_record_t record, rocprofiler_user_data_t* user_data, void* callback_data);
-      static void buffer_callback(rocprofiler_context_id_t context, rocprofiler_buffer_id_t buffer_id, rocprofiler_record_header_t** headers, size_t num_headers, void* user_data, uint64_t drop_count);
-      static void code_object_callback(rocprofiler_callback_tracing_record_t record, rocprofiler_user_data_t* user_data, void* callback_data);
-
+    RoctxDataSourcePrivate *d;
+    friend class RoctxDataSourcePrivate;
 };
 
 }    // namespace rpdtracer

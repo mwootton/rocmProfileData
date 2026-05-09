@@ -116,7 +116,6 @@ void Logger::rpdstart()
     std::unique_lock<std::mutex> lock(m_activeMutex);
     if (m_activeCount == 0) {
         //fprintf(stderr, "rpd_tracer: START\n");
-        m_apiTable->resumeRoctx(clocktime_ns());
         for (auto it = m_sources.begin(); it != m_sources.end(); ++it)
             (*it)->startTracing();
     }
@@ -130,7 +129,6 @@ void Logger::rpdstop()
         //fprintf(stderr, "rpd_tracer: STOP\n");
         for (auto it = m_sources.begin(); it != m_sources.end(); ++it)
             (*it)->stopTracing();
-        m_apiTable->suspendRoctx(clocktime_ns());
     }
     --m_activeCount;
 }
@@ -230,6 +228,8 @@ void Logger::init()
 
     // Create one instance of each available datasource
     std::list<std::string> factories = {
+        "RoctxDataSourceFactory",
+        "NvtxDataSourceFactory",
         "RocprofDataSourceFactory",
         "RoctracerDataSourceFactory",
         "CuptiDataSourceFactory",
