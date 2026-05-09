@@ -127,6 +127,7 @@ public:
     };
 
     void insert(const row&);
+    // TODO: remove once Logger::createOverheadRecord and Logger::rpd_rangePush/rpd_rangePop are migrated
     void insertRoctx(row&);
     void pushRoctx(const row&);
     void popRoctx(const row&);

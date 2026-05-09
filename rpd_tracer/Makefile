@@ -9,7 +9,7 @@ ROCM_VERSION ?= $(shell cat /opt/rocm/.info/version)
 
 RPD_LIBS = -lsqlite3 -lfmt
 RPD_INCLUDES =
-RPD_SRCS = Table.cpp BufferedTable.cpp OpTable.cpp KernelApiTable.cpp CopyApiTable.cpp ApiTable.cpp StringTable.cpp UStringTable.cpp MetadataTable.cpp MonitorTable.cpp StackFrameTable.cpp ApiIdList.cpp DbResource.cpp Logger.cpp Unwind.cpp
+RPD_SRCS = Table.cpp BufferedTable.cpp OpTable.cpp KernelApiTable.cpp CopyApiTable.cpp ApiTable.cpp StringTable.cpp UStringTable.cpp MetadataTable.cpp MonitorTable.cpp StackFrameTable.cpp ApiIdList.cpp DbResource.cpp Logger.cpp Unwind.cpp RoctxDataSource.cpp NvtxDataSource.cpp
 
 ifneq (,$(HIP_PATH))
         $(info rocm_version is ${ROCM_VERSION})
@@ -23,11 +23,11 @@ ifneq (,$(HIP_PATH))
 
         ifeq ($(USE_ROCPROFILER_SDK), true)
                 $(info Building with rocprofiler-sdk)
-		RPD_LIBS += -lrocprofiler-sdk -lrocprofiler-sdk-roctx
+		RPD_LIBS += -lrocprofiler-sdk
 		RPD_SRCS += RocprofDataSource.cpp
         else
                 $(info Building with roctracer)
-		RPD_LIBS += -lroctracer64 -lroctx64
+		RPD_LIBS += -lroctracer64
 		RPD_SRCS += RoctracerDataSource.cpp
 		RPD_INCLUDES += -I/opt/rocm/include/roctracer
         endif
@@ -70,7 +70,7 @@ all: | $(RPD_MAIN)
 
 
 $(RPD_MAIN): $(RPD_OBJS)
-	$(CXX) -o $@ $^ -shared -rdynamic -std=c++11 $(RPD_LIBS) -g
+	$(CXX) -o $@ $^ -shared -rdynamic -std=c++11 $(RPD_LIBS) -Wl,--version-script=marker_shim.ver -g
 
 .cpp.o:
 	$(CXX) -o $@ -c $< $(RPD_INCLUDES) -DAMD_INTERNAL_BUILD -std=c++17 -fPIC -g -O3
@@ -92,4 +92,4 @@ uninstall:
 	rm $(PREFIX)/bin/$(RPD_SCRIPT)
 .PHONY: clean
 clean:
-	rm -f *.o *.so 
+	rm -f *.o *.so *.d

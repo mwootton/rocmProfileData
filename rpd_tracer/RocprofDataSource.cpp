@@ -558,43 +558,7 @@ void RocprofDataSource::api_callback(rocprofiler_callback_tracing_record_t recor
 }
 #endif
 
-void RocprofDataSource::roctx_callback(rocprofiler_callback_tracing_record_t record, rocprofiler_user_data_t* user_data, void* callback_data)
-{
-    if (record.phase == ROCPROFILER_CALLBACK_PHASE_ENTER)
-        return;
-
-    Logger &logger = Logger::singleton();
-
-    if (record.kind == ROCPROFILER_CALLBACK_TRACING_MARKER_CORE_API) {
-        ApiTable::row row;
-        row.pid = GetPid();
-        row.tid = GetTid();
-        row.start = clocktime_ns();
-        row.end = row.start;
-        static sqlite3_int64 markerId = logger.stringTable().getOrCreate(std::string("UserMarker"));
-        row.domain_id = markerId;
-        row.category_id = EMPTY_STRING_ID;
-        row.apiName_id = markerId;
-        row.args_id = EMPTY_STRING_ID;
-        row.api_id = 0;
-
-        auto &data = *(static_cast<rocprofiler_callback_tracing_marker_api_data_t*>(record.payload));
-
-        switch (record.operation) {
-            case ROCPROFILER_MARKER_CORE_API_ID_roctxMarkA:
-                row.args_id = logger.ustringTable().create(data.args.roctxMarkA.message);
-                logger.apiTable().insertRoctx(row);
-            break;
-            case ROCPROFILER_MARKER_CORE_API_ID_roctxRangePushA:
-                row.args_id = logger.ustringTable().create(data.args.roctxRangePushA.message);
-                logger.apiTable().pushRoctx(row);
-            break;
-            case ROCPROFILER_MARKER_CORE_API_ID_roctxRangePop:
-                logger.apiTable().popRoctx(row);
-            break;
-        };
-    }
-}
+// roctx handling moved to RoctxDataSource
 
 
 #if 1
@@ -912,12 +876,7 @@ int RocprofDataSource::toolInit(rocprofiler_client_finalize_t finialize_func, vo
                                                    instance);
 #endif
 
-        rocprofiler_configure_callback_tracing_service(context,
-                                                   ROCPROFILER_CALLBACK_TRACING_MARKER_CORE_API,
-                                                   nullptr,
-                                                   0,
-                                                   roctx_callback,
-                                                   instance);
+        // roctx handling moved to RoctxDataSource
 #if 1
         // Buffers
         constexpr auto buffer_size_bytes      = 0x40000;
