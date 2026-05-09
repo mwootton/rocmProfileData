@@ -21,9 +21,9 @@
 ********************************************************************************/
 #include "RoctracerDataSource.h"
 
-#include <roctracer/roctracer_hip.h>
-#include <roctracer/roctracer_ext.h>
-#include <roctracer/roctracer_roctx.h>
+#include <roctracer_hip.h>
+#include <roctracer_ext.h>
+
 #include <hsa/hsa_ext_amd.h>
 
 #include <sqlite3.h>
@@ -759,38 +759,6 @@ void RoctracerDataSource::api_callback(
         }
     }
 
-    if (domain == ACTIVITY_DOMAIN_ROCTX) {
-        const roctx_api_data_t* data = (const roctx_api_data_t*)(callback_data);
-
-        ApiTable::row row;
-        row.pid = GetPid();
-        row.tid = GetTid();
-        row.start = clocktime_ns();
-        row.end = row.start;
-        static sqlite3_int64 roctxId = logger.stringTable().getOrCreate(std::string("UserMarker"));
-        row.domain_id = roctxId;
-        row.category_id = EMPTY_STRING_ID;
-        static sqlite3_int64 markerId = logger.stringTable().getOrCreate(std::string("UserMarker"));
-        row.apiName_id = markerId;
-        row.args_id = EMPTY_STRING_ID;
-        row.api_id = 0;
-
-        switch (cid) {
-            case ROCTX_API_ID_roctxMarkA:
-                row.args_id = logger.ustringTable().create(data->args.message);
-                logger.apiTable().insertRoctx(row);
-                break;
-            case ROCTX_API_ID_roctxRangePushA:
-                row.args_id = logger.ustringTable().create(data->args.message);
-                logger.apiTable().pushRoctx(row);
-                break;
-            case ROCTX_API_ID_roctxRangePop:
-                logger.apiTable().popRoctx(row);
-                break;
-            default:
-                break;
-        }
-    }
     std::call_once(register_once, atexit, Logger::rpdFinalize);
 }
 
@@ -929,8 +897,6 @@ void RoctracerDataSource::init() {
     roctracer_set_properties(ACTIVITY_DOMAIN_HIP_API, NULL);
 
     // Enable API callbacks
-    roctracer_enable_domain_callback(ACTIVITY_DOMAIN_ROCTX, api_callback, NULL);
-
     if (m_apiList.invertMode() == true) {
         // exclusion list - enable entire domain and turn off things in list
         roctracer_enable_domain_callback(ACTIVITY_DOMAIN_HIP_API, api_callback, NULL);
@@ -990,7 +956,6 @@ void RoctracerDataSource::flush() {
 void RoctracerDataSource::end() {
     roctracer_stop();
     roctracer_disable_domain_callback(ACTIVITY_DOMAIN_HIP_API);
-    roctracer_disable_domain_callback(ACTIVITY_DOMAIN_ROCTX);
 
     roctracer_disable_domain_activity(ACTIVITY_DOMAIN_HIP_API);
     roctracer_disable_domain_activity(ACTIVITY_DOMAIN_HSA_OPS);

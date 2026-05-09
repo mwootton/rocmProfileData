@@ -40,12 +40,4 @@ fi
 
 export RPDT_FILENAME=${OUTPUT_FILE}
 
-# Work around past poor planning
-USELIBS=librpd_tracer.so
-if [ $(ldd /usr/local/lib/librpd_tracer.so | grep libroctracer64 | wc -c) -ne 0 ] ; then
-    USELIBS=libroctx64.so:${USELIBS}
-elif [ $(ldd /usr/local/lib/librpd_tracer.so | grep librocprofiler-sdk | wc -c) -ne 0 ] ; then
-    USELIBS=librocprofiler-sdk-roctx.so:${USELIBS}
-fi
-
-LD_PRELOAD=${USELIBS} "$@"
+LD_PRELOAD=librpd_tracer.so "$@"

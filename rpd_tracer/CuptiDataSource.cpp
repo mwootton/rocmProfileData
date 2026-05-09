@@ -24,10 +24,6 @@
 #include <sqlite3.h>
 #include <fmt/format.h>
 
-#include "nvtx3/nvToolsExt.h"
-#include "nvtx3/nvToolsExtCuda.h"
-#include "nvtx3/nvToolsExtCudaRt.h"
-#include "generated_nvtx_meta.h"
 
 #include "Logger.h"
 #include "Utility.h"
@@ -60,9 +56,6 @@ void CuptiDataSource::init()
     m_apiList.add("cudaGetDevice_v3020");
     m_apiList.add("cudaSetDevice_v3020");
     m_apiList.add("cudaGetLastError_v3020");
-
-    //FIXME: gross
-    setenv("NVTX_INJECTION64_PATH", "/usr/local/cuda/targets/x86_64-linux/lib/libcupti.so", 0);
 
     // FIXME: cuptiSubscribe may fail with CUPTI_ERROR_MULTIPLE_SUBSCRIBERS_NOT_SUPPORTED
     cuptiSubscribe(&m_subscriber, (CUpti_CallbackFunc)api_callback, nullptr);
@@ -112,7 +105,6 @@ void CuptiDataSource::startTracing()
     }
 
     cuptiEnableDomain(1, m_subscriber, CUPTI_CB_DOMAIN_DRIVER_API);
-    cuptiEnableDomain(1, m_subscriber, CUPTI_CB_DOMAIN_NVTX);
     cuptiActivityEnable(CUPTI_ACTIVITY_KIND_MEMCPY);
     cuptiActivityEnable(CUPTI_ACTIVITY_KIND_MEMSET);
     cuptiActivityEnable(CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL);
@@ -122,7 +114,6 @@ void CuptiDataSource::stopTracing()
 {
     cuptiEnableDomain(0, m_subscriber, CUPTI_CB_DOMAIN_RUNTIME_API);
     cuptiEnableDomain(0, m_subscriber, CUPTI_CB_DOMAIN_DRIVER_API);
-    cuptiEnableDomain(0, m_subscriber, CUPTI_CB_DOMAIN_NVTX);
     cuptiActivityDisable(CUPTI_ACTIVITY_KIND_MEMCPY);
     cuptiActivityDisable(CUPTI_ACTIVITY_KIND_MEMSET);
     cuptiActivityDisable(CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL);
@@ -648,44 +639,7 @@ void CUPTIAPI CuptiDataSource::api_callback(void *userdata, CUpti_CallbackDomain
             logger.apiTable().insert(row);
         }
     }
-    else if (domain = CUPTI_CB_DOMAIN_NVTX) {
-        ApiTable::row row;
-        row.pid = GetPid();
-        row.tid = GetTid();
-        row.start = clocktime_ns();
-        row.end = row.start;
-        static sqlite3_int64 nvtxId = logger.stringTable().getOrCreate(std::string("UserMarker"));
-        row.domain_id = nvtxId;
-        row.category_id = EMPTY_STRING_ID;
-        static sqlite3_int64 markerId = logger.stringTable().getOrCreate(std::string("UserMarker"));
-        row.apiName_id = markerId;
-        row.args_id = EMPTY_STRING_ID;
-        row.api_id = 0;
-
-        CUpti_NvtxData* data = (CUpti_NvtxData*)cbInfo;
-
-        switch (cbid) {
-            case CUPTI_CBID_NVTX_nvtxMarkA:
-                {
-                    auto &params = *(nvtxMarkA_params_st *)(data->functionParams);
-                    row.args_id = logger.ustringTable().create(params.message);
-                    logger.apiTable().insertRoctx(row);
-                }
-                break;
-            case CUPTI_CBID_NVTX_nvtxRangePushA:
-                {
-                    auto &params = *(nvtxRangePushA_params_st *)(data->functionParams);
-                    row.args_id = logger.ustringTable().create(params.message);
-                    logger.apiTable().pushRoctx(row);
-                }
-                break;
-            case CUPTI_CBID_NVTX_nvtxRangePop:
-                    logger.apiTable().popRoctx(row);
-                break;
-            default:
-                break;
-        }
-    }
+    // nvtx handling moved to NvtxDataSource
     std::call_once(register_once, atexit, Logger::rpdFinalize);
 }
 
