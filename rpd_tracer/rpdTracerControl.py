@@ -58,14 +58,7 @@ class rpdTracerControl:
         if cls.__initFile == True and cls.__active == True:
             if os.path.exists(cls.__filename):
                 os.remove(cls.__filename)
-            # Create new file and write schema
-            schema = RocpdSchema()
-            connection = sqlite3.connect(cls.__filename)
-            schema.writeSchema(connection)
-            connection.commit()
-            connection.close()
-            #
-            #os.environ["RPDT_FILENAME"] = cls.__filename
+            # Schema added to new file by tracer
             cls.__initFile = False   
         os.environ["RPDT_FILENAME"] = cls.__filename
 

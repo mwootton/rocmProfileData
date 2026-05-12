@@ -91,6 +91,20 @@ utilitySchema.h: $(SCHEMA_DIR)/utilitySchema.cmd
 
 Schema.o: tableSchema.h utilitySchema.h
 
+SCHEMA_DIR = ../rocpd_python/rocpd/schema_data
+
+tableSchema.h: $(SCHEMA_DIR)/tableSchema.cmd
+	printf 'static const unsigned char tableSchema_cmd[] = {\n' > $@
+	xxd -i < $< >> $@
+	printf ', 0x00\n};\n' >> $@
+
+utilitySchema.h: $(SCHEMA_DIR)/utilitySchema.cmd
+	printf 'static const unsigned char utilitySchema_cmd[] = {\n' > $@
+	xxd -i < $< >> $@
+	printf ', 0x00\n};\n' >> $@
+
+Schema.o: tableSchema.h utilitySchema.h
+
 
 $(RPD_MAIN): $(RPD_OBJS)
 	$(CXX) -o $@ $^ -shared -rdynamic -std=c++11 $(RPD_LIBS) -Wl,--version-script=marker_shim.ver -g
