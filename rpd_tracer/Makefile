@@ -11,7 +11,7 @@ ROCM_VERSION ?= $(shell cat $(HIP_PATH)/.info/version)
 
 RPD_LIBS = -lsqlite3 -lfmt -ldl
 RPD_INCLUDES =
-RPD_SRCS = Table.cpp BufferedTable.cpp OpTable.cpp KernelApiTable.cpp CopyApiTable.cpp ApiTable.cpp StringTable.cpp UStringTable.cpp MetadataTable.cpp MonitorTable.cpp StackFrameTable.cpp ApiIdList.cpp DbResource.cpp Logger.cpp Unwind.cpp RoctxDataSource.cpp NvtxDataSource.cpp RlogClient.cpp
+RPD_SRCS = Table.cpp BufferedTable.cpp OpTable.cpp KernelApiTable.cpp CopyApiTable.cpp ApiTable.cpp StringTable.cpp UStringTable.cpp MetadataTable.cpp MonitorTable.cpp StackFrameTable.cpp ApiIdList.cpp DbResource.cpp Schema.cpp Logger.cpp Unwind.cpp RoctxDataSource.cpp NvtxDataSource.cpp RlogClient.cpp
 
 ifneq (,$(HIP_PATH))
         $(info rocm_version is ${ROCM_VERSION})
@@ -77,6 +77,20 @@ all: $(RPD_MAIN)
 
 .PHONY: all
 
+SCHEMA_DIR = ../rocpd_python/rocpd/schema_data
+
+tableSchema.h: $(SCHEMA_DIR)/tableSchema.cmd
+	printf 'static const unsigned char tableSchema_cmd[] = {\n' > $@
+	xxd -i < $< >> $@
+	printf ', 0x00\n};\n' >> $@
+
+utilitySchema.h: $(SCHEMA_DIR)/utilitySchema.cmd
+	printf 'static const unsigned char utilitySchema_cmd[] = {\n' > $@
+	xxd -i < $< >> $@
+	printf ', 0x00\n};\n' >> $@
+
+Schema.o: tableSchema.h utilitySchema.h
+
 
 $(RPD_MAIN): $(RPD_OBJS)
 	$(CXX) -o $@ $^ -shared -rdynamic -std=c++11 $(RPD_LIBS) -Wl,--version-script=marker_shim.ver -g
@@ -100,4 +114,4 @@ uninstall:
 
 .PHONY: clean
 clean:
-	rm -f *.o *.so *.d
+	rm -f *.o *.so *.d tableSchema.h utilitySchema.h

@@ -31,6 +31,7 @@
 #include <fmt/format.h>
 
 #include "Utility.h"
+#include "Schema.h"
 
 using rpdtracer::Logger;
 
@@ -245,6 +246,10 @@ void Logger::init()
     rlog::getProperty("rpd_tracer", "filename", "./trace.rpd");
     const char *filename = getConfig("RPDT_FILENAME", "filename", "./trace.rpd");
     m_filename = filename;
+
+    // Ensure schema exists
+
+    ensureSchema(filename);
 
     // Create table recorders
 
