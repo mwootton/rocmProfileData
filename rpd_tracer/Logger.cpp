@@ -27,6 +27,7 @@
 #include <dlfcn.h>
 
 #include "Utility.h"
+#include "Schema.h"
 
 using rpdtracer::Logger;
 
@@ -202,6 +203,10 @@ void Logger::init()
     if (filename == NULL)
         filename = "./trace.rpd";
     m_filename = filename;
+
+    // Ensure schema exists
+
+    ensureSchema(filename);
 
     // Create table recorders
 
