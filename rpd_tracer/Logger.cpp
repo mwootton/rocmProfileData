@@ -210,15 +210,23 @@ void Logger::init()
 
     // Create table recorders
 
+    bool directWrite = false;
+
+    const char *dwrite = getenv("RPDT_DIRECTWRITE");
+    if (dwrite != nullptr) {
+        int val = atoi(dwrite);
+        directWrite = (val != 0);
+    }
+
     m_metadataTable = new MetadataTable(filename);
-    m_stringTable = new StringTable(filename);
-    m_ustringTable = new UStringTable(filename);
-    m_kernelApiTable = new KernelApiTable(filename);
-    m_copyApiTable = new CopyApiTable(filename);
-    m_opTable = new OpTable(filename);
-    m_apiTable = new ApiTable(filename);
-    m_monitorTable = new MonitorTable(filename);
-    m_stackFrameTable = new StackFrameTable(filename);
+    m_stringTable = new StringTable(filename, directWrite);
+    m_ustringTable = new UStringTable(filename, directWrite);
+    m_kernelApiTable = new KernelApiTable(filename, directWrite);
+    m_copyApiTable = new CopyApiTable(filename, directWrite);
+    m_opTable = new OpTable(filename, directWrite);
+    m_apiTable = new ApiTable(filename, directWrite);
+    m_monitorTable = new MonitorTable(filename, directWrite);
+    m_stackFrameTable = new StackFrameTable(filename, directWrite);
 
     // Offset primary keys so they do not collide between sessions
     sqlite3_int64 offset = m_metadataTable->sessionId() * (sqlite3_int64(1) << 32);

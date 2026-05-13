@@ -43,21 +43,25 @@ public:
     std::array<StackFrameTable::row, BUFFERSIZE> rows; // Circular buffer
 
     sqlite3_stmt *insertStatement;
+    bool directWrite;
 
     StackFrameTable *p;
 };
 
 
-StackFrameTable::StackFrameTable(const char *basefile)
+StackFrameTable::StackFrameTable(const char *basefile, bool directWrite)
 : BufferedTable(basefile, StackFrameTablePrivate::BUFFERSIZE, StackFrameTablePrivate::BATCHSIZE)
 , d(new StackFrameTablePrivate(this))
 {
     int ret;
-    // set up tmp table
+    d->directWrite = directWrite;
 
-    ret = sqlite3_exec(m_connection, SCHEMA, NULL, NULL, NULL);
-    // prepare queries to insert row
-    ret = sqlite3_prepare_v2(m_connection, "insert into temp_rocpd_stackframe(api_ptr_id, depth, name_id) values (?,?,?)", -1, &d->insertStatement, NULL);
+    if (!directWrite) {
+        ret = sqlite3_exec(m_connection, SCHEMA, NULL, NULL, NULL);
+        ret = sqlite3_prepare_v2(m_connection, "insert into temp_rocpd_stackframe(api_ptr_id, depth, name_id) values (?,?,?)", -1, &d->insertStatement, NULL);
+    } else {
+        ret = sqlite3_prepare_v2(m_connection, "insert into rocpd_stackframe(api_ptr_id, depth, name_id) values (?,?,?)", -1, &d->insertStatement, NULL);
+    }
 }
 
 
@@ -87,6 +91,9 @@ void StackFrameTable::insert(const StackFrameTable::row &row)
 
 void StackFrameTable::flushRows()
 {
+    if (d->directWrite)
+        return;
+
     int ret = 0;
     ret = sqlite3_exec(m_connection, "begin transaction", NULL, NULL, NULL);
     ret = sqlite3_exec(m_connection, "insert into rocpd_stackframe select * from temp_rocpd_stackframe", NULL, NULL, NULL);

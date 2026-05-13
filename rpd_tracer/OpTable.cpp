@@ -54,23 +54,28 @@ public:
 
     sqlite3_stmt *opInsert;
     sqlite3_stmt *apiOpInsert;
+    bool directWrite;
 
     OpTable *p;
 };
 
 
-OpTable::OpTable(const char *basefile)
+OpTable::OpTable(const char *basefile, bool directWrite)
 : BufferedTable(basefile, OpTablePrivate::BUFFERSIZE, OpTablePrivate::BATCHSIZE)
 , d(new OpTablePrivate(this))
 {
     int ret;
-    // set up tmp tables
-    ret = sqlite3_exec(m_connection, SCHEMA_OP, NULL, NULL, NULL);
-    ret = sqlite3_exec(m_connection, SCHEMA_API_OPS, NULL, NULL, NULL);
+    d->directWrite = directWrite;
 
-    // prepare queries to insert row
-    ret = sqlite3_prepare_v2(m_connection, "insert into temp_rocpd_op(id, gpuId, queueId, sequenceId, start, end, description_id, opType_id) values (?,?,?,?,?,?,?,?)", -1, &d->opInsert, NULL);
-    ret = sqlite3_prepare_v2(m_connection, "insert into temp_rocpd_api_ops(api_id, op_id) values (?,?)", -1, &d->apiOpInsert, NULL);
+    if (!directWrite) {
+        ret = sqlite3_exec(m_connection, SCHEMA_OP, NULL, NULL, NULL);
+        ret = sqlite3_exec(m_connection, SCHEMA_API_OPS, NULL, NULL, NULL);
+        ret = sqlite3_prepare_v2(m_connection, "insert into temp_rocpd_op(id, gpuId, queueId, sequenceId, start, end, description_id, opType_id) values (?,?,?,?,?,?,?,?)", -1, &d->opInsert, NULL);
+        ret = sqlite3_prepare_v2(m_connection, "insert into temp_rocpd_api_ops(api_id, op_id) values (?,?)", -1, &d->apiOpInsert, NULL);
+    } else {
+        ret = sqlite3_prepare_v2(m_connection, "insert into rocpd_op(id, gpuId, queueId, sequenceId, start, end, description_id, opType_id) values (?,?,?,?,?,?,?,?)", -1, &d->opInsert, NULL);
+        ret = sqlite3_prepare_v2(m_connection, "insert into rocpd_api_ops(api_id, op_id) values (?,?)", -1, &d->apiOpInsert, NULL);
+    }
 }
 
 
@@ -108,6 +113,9 @@ void OpTable::associateDescription(const sqlite3_int64 &api_id, const sqlite3_in
 
 void OpTable::flushRows()
 {
+    if (d->directWrite)
+        return;
+
     int ret = 0;
     ret = sqlite3_exec(m_connection, "begin transaction", NULL, NULL, NULL);
     ret = sqlite3_exec(m_connection, "insert into rocpd_op select * from temp_rocpd_op", NULL, NULL, NULL);
