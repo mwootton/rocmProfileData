@@ -3,6 +3,7 @@
  **************************************************************************/
 #include "Table.h"
 #include "Utility.h"
+#include <cstring>
 
 using rpdtracer::Table;
 
@@ -13,14 +14,23 @@ int busy_handler(void *data, int count)
     return 1;
 }
 
+static int wal_check_callback(void *data, int ncols, char **values, char **names)
+{
+    if (ncols > 0 && values[0])
+        *static_cast<bool*>(data) = (strcmp(values[0], "wal") == 0);
+    return 0;
+}
+
 Table::Table(const char *basefile)
 : m_connection(NULL)
 {
-    //pthread_mutex_init(m_mutex);
-    //pthread_cond_init(m_wait);
     sqlite3_open(basefile, &m_connection);
-    //sqlite3_busy_timeout(m_connection, 10000);
     sqlite3_busy_handler(m_connection, &busy_handler, NULL);
+
+    bool walEnabled = false;
+    sqlite3_exec(m_connection, "PRAGMA journal_mode=WAL", wal_check_callback, &walEnabled, NULL);
+    if (walEnabled)
+        sqlite3_exec(m_connection, "PRAGMA synchronous=NORMAL", NULL, NULL, NULL);
 }
 
 Table::~Table()

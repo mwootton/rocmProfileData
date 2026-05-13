@@ -46,6 +46,7 @@ public:
     std::unordered_map<std::string,sqlite3_int64> cache;     // Cache for string lookups
 
     sqlite3_stmt *stringInsert;
+    bool directWrite;
 
     void insert(StringTable::row&);
 
@@ -55,17 +56,20 @@ public:
 };
 
 
-StringTable::StringTable(const char *basefile)
+StringTable::StringTable(const char *basefile, bool directWrite)
 : BufferedTable(basefile, StringTablePrivate::BUFFERSIZE, StringTablePrivate::BATCHSIZE)
 , d(new StringTablePrivate(this))
 {
     int ret;
-    // set up tmp tables
-    ret = sqlite3_exec(m_connection, SCHEMA_STRING, NULL, NULL, NULL);
+    d->directWrite = directWrite;
 
-    // prepare queries to insert row
-    ret = sqlite3_prepare_v2(m_connection, "insert into temp_rocpd_string(id, string) values (?,?)", -1, &d->stringInsert, NULL);
-    
+    if (!directWrite) {
+        ret = sqlite3_exec(m_connection, SCHEMA_STRING, NULL, NULL, NULL);
+        ret = sqlite3_prepare_v2(m_connection, "insert into temp_rocpd_string(id, string) values (?,?)", -1, &d->stringInsert, NULL);
+    } else {
+        ret = sqlite3_prepare_v2(m_connection, "insert into rocpd_string(id, string) values (?,?)", -1, &d->stringInsert, NULL);
+    }
+
     d->cache.reserve(64 * 1024);  // Avoid/delay rehashing for typical runs
 
     StringTable::getOrCreate("");    // empty string is id=1
@@ -123,6 +127,9 @@ void StringTablePrivate::insert(StringTable::row &row)
 
 void StringTable::flushRows()
 {
+    if (d->directWrite)
+        return;
+
     int ret = 0;
 
     ret = sqlite3_exec(m_connection, "begin transaction", NULL, NULL, NULL);

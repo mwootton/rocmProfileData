@@ -49,6 +49,7 @@ public:
 
     sqlite3_stmt *apiInsert;
     sqlite3_stmt *apiInsertNoId;
+    bool directWrite;
 
     sqlite3_int64 roctxResumeTime;
 
@@ -56,16 +57,21 @@ public:
 };
 
 
-ApiTable::ApiTable(const char *basefile)
+ApiTable::ApiTable(const char *basefile, bool directWrite)
 : BufferedTable(basefile, ApiTablePrivate::BUFFERSIZE, ApiTablePrivate::BATCHSIZE)
 , d(new ApiTablePrivate(this))
 {
     int ret;
-    // set up tmp tables
-    ret = sqlite3_exec(m_connection, SCHEMA_API, NULL, NULL, NULL);
+    d->directWrite = directWrite;
 
-    ret = sqlite3_prepare_v2(m_connection, "insert into temp_rocpd_api(id, pid, tid, start, end, domain_id, category_id, apiName_id, args_id) values (?,?,?,?,?,?,?,?,?)", -1, &d->apiInsert, NULL);
-    ret = sqlite3_prepare_v2(m_connection, "insert into temp_rocpd_api(pid, tid, start, end, domain_id, category_id, apiName_id, args_id) values (?,?,?,?,?,?)", -1, &d->apiInsertNoId, NULL);
+    if (!directWrite) {
+        ret = sqlite3_exec(m_connection, SCHEMA_API, NULL, NULL, NULL);
+        ret = sqlite3_prepare_v2(m_connection, "insert into temp_rocpd_api(id, pid, tid, start, end, domain_id, category_id, apiName_id, args_id) values (?,?,?,?,?,?,?,?,?)", -1, &d->apiInsert, NULL);
+        ret = sqlite3_prepare_v2(m_connection, "insert into temp_rocpd_api(pid, tid, start, end, domain_id, category_id, apiName_id, args_id) values (?,?,?,?,?,?)", -1, &d->apiInsertNoId, NULL);
+    } else {
+        ret = sqlite3_prepare_v2(m_connection, "insert into rocpd_api(id, pid, tid, start, end, domain_id, category_id, apiName_id, args_id) values (?,?,?,?,?,?,?,?,?)", -1, &d->apiInsert, NULL);
+        ret = sqlite3_prepare_v2(m_connection, "insert into rocpd_api(pid, tid, start, end, domain_id, category_id, apiName_id, args_id) values (?,?,?,?,?,?)", -1, &d->apiInsertNoId, NULL);
+    }
 
     d->roctxResumeTime = 0;
 }
@@ -217,6 +223,9 @@ void ApiTable::resumeRoctx(sqlite3_int64 atTime)
 
 void ApiTable::flushRows()
 {
+    if (d->directWrite)
+        return;
+
     int ret = 0;
     ret = sqlite3_exec(m_connection, "begin transaction", NULL, NULL, NULL);
     ret = sqlite3_exec(m_connection, "insert into rocpd_api select * from temp_rocpd_api", NULL, NULL, NULL);
