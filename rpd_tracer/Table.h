@@ -63,7 +63,7 @@ class StringTablePrivate;
 class StringTable: public BufferedTable
 {
 public:
-    StringTable(const char *basefile);
+    StringTable(const char *basefile, bool directWrite = false);
     virtual ~StringTable();
 
     struct row {
@@ -87,7 +87,7 @@ class UStringTablePrivate;
 class UStringTable: public BufferedTable
 {
 public:
-    UStringTable(const char *basefile);
+    UStringTable(const char *basefile, bool directWrite = false);
     virtual ~UStringTable();
 
     struct row {
@@ -111,7 +111,7 @@ class ApiTablePrivate;
 class ApiTable: public BufferedTable
 {
 public:
-    ApiTable(const char *basefile);
+    ApiTable(const char *basefile, bool directWrite = false);
     virtual ~ApiTable();
 
     struct row {
@@ -147,7 +147,7 @@ class KernelApiTablePrivate;
 class KernelApiTable: public BufferedTable
 {
 public:
-    KernelApiTable(const char *basefile);
+    KernelApiTable(const char *basefile, bool directWrite = false);
     virtual ~KernelApiTable();
 
     struct row {
@@ -183,7 +183,7 @@ class CopyApiTablePrivate;
 class CopyApiTable: public BufferedTable
 {
 public:
-    CopyApiTable(const char *basefile);
+    CopyApiTable(const char *basefile, bool directWrite = false);
     virtual ~CopyApiTable();
 
     struct row {
@@ -239,7 +239,7 @@ class OpTablePrivate;
 class OpTable: public BufferedTable
 {
 public:
-    OpTable(const char *basefile);
+    OpTable(const char *basefile, bool directWrite = false);
     virtual ~OpTable();
 
     struct row {
@@ -287,7 +287,7 @@ class MonitorTablePrivate;
 class MonitorTable: public BufferedTable
 {
 public:
-    MonitorTable(const char *basefile);
+    MonitorTable(const char *basefile, bool directWrite = false);
     virtual ~MonitorTable();
 
     struct row {
@@ -315,7 +315,7 @@ class StackFrameTablePrivate;
 class StackFrameTable: public BufferedTable
 {
 public:
-    StackFrameTable(const char *basefile);
+    StackFrameTable(const char *basefile, bool directWrite = false);
     virtual ~StackFrameTable();
 
     struct row {

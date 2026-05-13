@@ -46,6 +46,7 @@ public:
     std::array<UStringTable::row, BUFFERSIZE> rows; // Circular buffer
 
     sqlite3_stmt *stringInsert;
+    bool directWrite;
 
     void insert(UStringTable::row&);
 
@@ -53,17 +54,20 @@ public:
 };
 
 
-UStringTable::UStringTable(const char *basefile)
+UStringTable::UStringTable(const char *basefile, bool directWrite)
 : BufferedTable(basefile, UStringTablePrivate::BUFFERSIZE, UStringTablePrivate::BATCHSIZE)
 , d(new UStringTablePrivate(this))
 {
     int ret;
-    // set up tmp tables
-    ret = sqlite3_exec(m_connection, SCHEMA_USTRING, NULL, NULL, NULL);
+    d->directWrite = directWrite;
 
-    // prepare queries to insert row
-    ret = sqlite3_prepare_v2(m_connection, "insert into temp_rocpd_ustring(id, string) values (?,?)", -1, &d->stringInsert, NULL);
-    
+    if (!directWrite) {
+        ret = sqlite3_exec(m_connection, SCHEMA_USTRING, NULL, NULL, NULL);
+        ret = sqlite3_prepare_v2(m_connection, "insert into temp_rocpd_ustring(id, string) values (?,?)", -1, &d->stringInsert, NULL);
+    } else {
+        ret = sqlite3_prepare_v2(m_connection, "insert into rocpd_ustring(id, string) values (?,?)", -1, &d->stringInsert, NULL);
+    }
+
     // empty string is id=1 - insert it first, now
     UStringTable::row row;
     row.string_id = 0;
@@ -116,6 +120,9 @@ void UStringTablePrivate::insert(UStringTable::row &row)
 
 void UStringTable::flushRows()
 {
+    if (d->directWrite)
+        return;
+
     int ret = 0;
 
     ret = sqlite3_exec(m_connection, "begin transaction", NULL, NULL, NULL);

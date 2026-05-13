@@ -45,21 +45,25 @@ public:
     std::array<KernelApiTable::row, BUFFERSIZE> rows; // Circular buffer
 
     sqlite3_stmt *apiInsert;
+    bool directWrite;
 
     KernelApiTable *p;
 };
 
 
-KernelApiTable::KernelApiTable(const char *basefile)
+KernelApiTable::KernelApiTable(const char *basefile, bool directWrite)
 : BufferedTable(basefile, KernelApiTablePrivate::BUFFERSIZE, KernelApiTablePrivate::BATCHSIZE)
 , d(new KernelApiTablePrivate(this))
 {
     int ret;
-    // set up tmp table
-    ret = sqlite3_exec(m_connection, SCHEMA_KERNELAPI, NULL, NULL, NULL);
+    d->directWrite = directWrite;
 
-    // prepare queries to insert row
-    ret = sqlite3_prepare_v2(m_connection, "insert into temp_rocpd_kernelapi(api_ptr_id, stream, gridX, gridY, gridz, workgroupX, workgroupY, workgroupZ, groupSegmentSize, privateSegmentSize, kernelName_id) values (?,?,?,?,?,?,?,?,?,?,?)", -1, &d->apiInsert, NULL);
+    if (!directWrite) {
+        ret = sqlite3_exec(m_connection, SCHEMA_KERNELAPI, NULL, NULL, NULL);
+        ret = sqlite3_prepare_v2(m_connection, "insert into temp_rocpd_kernelapi(api_ptr_id, stream, gridX, gridY, gridz, workgroupX, workgroupY, workgroupZ, groupSegmentSize, privateSegmentSize, kernelName_id) values (?,?,?,?,?,?,?,?,?,?,?)", -1, &d->apiInsert, NULL);
+    } else {
+        ret = sqlite3_prepare_v2(m_connection, "insert into rocpd_kernelapi(api_ptr_id, stream, gridX, gridY, gridz, workgroupX, workgroupY, workgroupZ, groupSegmentSize, privateSegmentSize, kernelName_id) values (?,?,?,?,?,?,?,?,?,?,?)", -1, &d->apiInsert, NULL);
+    }
 }
 
 
@@ -89,6 +93,9 @@ void KernelApiTable::insert(const KernelApiTable::row &row)
 
 void KernelApiTable::flushRows()
 {
+    if (d->directWrite)
+        return;
+
     int ret = 0;
     ret = sqlite3_exec(m_connection, "begin transaction", NULL, NULL, NULL);
     ret = sqlite3_exec(m_connection, "insert into rocpd_kernelapi select * from temp_rocpd_kernelapi", NULL, NULL, NULL);
