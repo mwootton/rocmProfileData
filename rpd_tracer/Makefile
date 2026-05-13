@@ -66,14 +66,15 @@ endif
 RPD_OBJS = $(RPD_SRCS:.cpp=.o)
 RPD_DEPS = $(RPD_OBJS:.o=.d)
 
-RPD_MAIN = librpd_tracer.so
+RPD_TRACER = librpd_tracer.so
+RPD_EMBEDDED = librpd_embedded.so
 RPD_SCRIPT = runTracer.sh loadTracer.sh
 
 PYTHON = python3
 PIP = pip3
 
 
-all: $(RPD_MAIN)
+all: $(RPD_TRACER) $(RPD_EMBEDDED)
 
 .PHONY: all
 
@@ -91,39 +92,35 @@ utilitySchema.h: $(SCHEMA_DIR)/utilitySchema.cmd
 
 Schema.o: tableSchema.h utilitySchema.h
 
-SCHEMA_DIR = ../rocpd_python/rocpd/schema_data
 
-tableSchema.h: $(SCHEMA_DIR)/tableSchema.cmd
-	printf 'static const unsigned char tableSchema_cmd[] = {\n' > $@
-	xxd -i < $< >> $@
-	printf ', 0x00\n};\n' >> $@
+rpd_capi_tracer.o: rpd_capi.cpp
+	$(CXX) -o $@ -c $< $(RPD_INCLUDES) -DAMD_INTERNAL_BUILD -DRPD_TRACER_BUILD -std=c++17 -fPIC -g -O3 -MMD -MP
 
-utilitySchema.h: $(SCHEMA_DIR)/utilitySchema.cmd
-	printf 'static const unsigned char utilitySchema_cmd[] = {\n' > $@
-	xxd -i < $< >> $@
-	printf ', 0x00\n};\n' >> $@
+rpd_capi_embedded.o: rpd_capi.cpp
+	$(CXX) -o $@ -c $< $(RPD_INCLUDES) -DAMD_INTERNAL_BUILD -std=c++17 -fPIC -g -O3 -MMD -MP
 
-Schema.o: tableSchema.h utilitySchema.h
+$(RPD_TRACER): $(RPD_OBJS) rpd_capi_tracer.o
+	$(CXX) -o $@ $^ -shared -rdynamic -std=c++11 $(RPD_LIBS) -Wl,--version-script=marker_shim.ver -g
 
-
-$(RPD_MAIN): $(RPD_OBJS)
+$(RPD_EMBEDDED): $(RPD_OBJS) rpd_capi_embedded.o
 	$(CXX) -o $@ $^ -shared -rdynamic -std=c++11 $(RPD_LIBS) -Wl,--version-script=marker_shim.ver -g
 
 %.o: %.cpp
 	$(CXX) -o $@ -c $< $(RPD_INCLUDES) -DAMD_INTERNAL_BUILD -std=c++17 -fPIC -g -O3 -MMD -MP
 
 -include $(RPD_DEPS)
+-include rpd_capi_tracer.d rpd_capi_embedded.d
 
 .PHONY: install
 install: all
-	cp $(RPD_MAIN)  $(PREFIX)/lib/
+	cp $(RPD_TRACER) $(RPD_EMBEDDED)  $(PREFIX)/lib/
 	cp $(RPD_SCRIPT) $(PREFIX)/bin/
 	ldconfig
 	$(PIP) install .
 
 .PHONY: uninstall
 uninstall:
-	rm $(PREFIX)/lib/$(RPD_MAIN)
+	rm $(PREFIX)/lib/$(RPD_TRACER) $(PREFIX)/lib/$(RPD_EMBEDDED)
 	rm $(PREFIX)/bin/$(RPD_SCRIPT)
 
 .PHONY: clean

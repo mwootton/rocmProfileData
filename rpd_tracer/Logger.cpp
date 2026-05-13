@@ -37,34 +37,6 @@ using rpdtracer::Logger;
 
 namespace rpdtracer { void rlogClientInit(); }
 
-// Hide the C-api here for now
-extern "C" {
-void rpdstart()
-{
-    Logger::singleton().rpdstart();
-}
-
-void rpdstop()
-{
-    Logger::singleton().rpdstop();
-}
-
-void rpdflush()
-{
-    Logger::singleton().rpdflush();
-}
-
-void rpd_rangePush(const char *domain, const char *apiName, const char* args)
-{
-    Logger::singleton().rpd_rangePush(domain, apiName, args);
-}
-
-void rpd_rangePop()
-{
-    Logger::singleton().rpd_rangePop();
-}
-}  // extern "C"
-
 // GFH - This mirrors the function in the pre-refactor code.  Allows both code paths to compile.
 //   See table classes for users.  Todo: build a proper threaded record writer
 void rpdtracer::createOverheadRecord(uint64_t start, uint64_t end, const std::string &name, const std::string &args)
@@ -82,8 +54,6 @@ Logger& Logger::singleton()
     return logger;
 }
 
-static void ourAtexitHandler(void*);
-
 void Logger::rpdInit() {
     bool doInit = true;
     char *val = getenv("RPDT_DELAYINIT");
@@ -97,58 +67,11 @@ void Logger::rpdInit() {
 
     // Indicate the tracer loaded.  Used for snooping without loading
     setenv("RPDT_LOADED", "1", 1);
-
-    // Register our handler via the real __cxa_atexit so it runs first,
-    // before any handlers captured in s_atexitList.
-    static auto real_cxa_atexit = (int(*)(void(*)(void*), void*, void*))dlsym(RTLD_NEXT, "__cxa_atexit");
-    real_cxa_atexit(ourAtexitHandler, nullptr, nullptr);
 }
 
 void Logger::rpdFinalize() {
     if (loggerInitialized)
         Logger::singleton().finalize();
-}
-
-// atexit/cxa_atexit interception — call rpdFinalize before any registered handler
-
-namespace {
-    struct AtexitEntry {
-        void (*func)(void*);
-        void* arg;
-    };
-    std::vector<AtexitEntry> s_atexitList;
-    std::mutex s_atexitMutex;
-
-    void c_atexit_trampoline(void* fn) {
-        reinterpret_cast<void(*)()>(fn)();
-    }
-}
-
-static void ourAtexitHandler(void*)
-{
-    Logger::rpdFinalize();
-    std::unique_lock<std::mutex> lock(s_atexitMutex);
-    while (!s_atexitList.empty()) {
-        auto entry = s_atexitList.back();
-        s_atexitList.pop_back();
-        lock.unlock();
-        entry.func(entry.arg);
-        lock.lock();
-    }
-}
-
-extern "C" int atexit(void (*fn)())
-{
-    std::lock_guard<std::mutex> lock(s_atexitMutex);
-    s_atexitList.push_back({c_atexit_trampoline, reinterpret_cast<void*>(fn)});
-    return 0;
-}
-
-extern "C" int __cxa_atexit(void (*func)(void*), void* arg, void* /*dso_handle*/)
-{
-    std::lock_guard<std::mutex> lock(s_atexitMutex);
-    s_atexitList.push_back({func, arg});
-    return 0;
 }
 
 
