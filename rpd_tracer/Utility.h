@@ -91,6 +91,8 @@ static inline timestamp_t clocktime_ns() {
     return now_ns + svc_read_offset_ns(now_ns);
 }
 
+int sqlite_busy_handler(void *data, int count);
+
 void createOverheadRecord(uint64_t start, uint64_t end, const std::string &name, const std::string &args);
 
 class Logger;
