@@ -75,27 +75,46 @@ def _create_app():
         ("Metadata", "/metadata"),
     ]
 
+    TL_LINKS = [
+        ("GPU Timeline", "/tl/gpu-timeline"),
+        ("Kernel Categories", "/tl/kernel-categories"),
+        ("Short Kernels", "/tl/short-kernels"),
+        ("Torch Ops", "/tl/torch-ops"),
+        ("Ops by Category", "/tl/ops-by-category"),
+    ]
+
+    link_style = {
+        "display": "block",
+        "padding": "8px 12px",
+        "marginBottom": "4px",
+        "textDecoration": "none",
+        "color": "#ddd",
+        "borderRadius": "4px",
+    }
+
     sidebar = html.Div(
         [
             html.H2("RPD Viewer", style={"marginBottom": "20px"}),
             html.Hr(),
-            html.Div(id="rpd-filename", style={"fontSize": "12px", "color": "#aaa", "marginBottom": "15px"}),
+            dcc.Link(id="rpd-filename", href="/file-info",
+                     style={"fontSize": "12px", "color": "#aaa", "marginBottom": "15px", "display": "block", "textDecoration": "none"}),
             html.Nav([
-                dcc.Link(
-                    label,
-                    href=href,
-                    className="nav-link",
-                    style={
-                        "display": "block",
-                        "padding": "8px 12px",
-                        "marginBottom": "4px",
-                        "textDecoration": "none",
-                        "color": "#ddd",
-                        "borderRadius": "4px",
-                    },
-                )
+                dcc.Link(label, href=href, className="nav-link", style=link_style)
                 for label, href in NAV_LINKS
             ]),
+            html.Div(
+                [
+                    html.Div("Analysis", style={
+                        "fontSize": "11px", "color": "#888", "textTransform": "uppercase",
+                        "letterSpacing": "1px", "padding": "12px 12px 4px",
+                    }),
+                    html.Nav([
+                        dcc.Link(label, href=href, className="nav-link", style=link_style)
+                        for label, href in TL_LINKS
+                    ]),
+                ],
+                style={"borderTop": "1px solid #444", "marginTop": "10px"},
+            ),
         ],
         style={
             "width": "220px",
@@ -199,6 +218,49 @@ def _create_app():
             headers["Content-Encoding"] = "gzip"
 
         return Response(data, mimetype="application/json", headers=headers)
+
+    @server.route("/download-rpd")
+    def download_rpd():
+        if not db.rpd_path or not os.path.isfile(db.rpd_path):
+            return Response("No RPD file loaded", status=404)
+
+        filename = os.path.basename(db.rpd_path)
+        headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+
+        if "gzip" in request.headers.get("Accept-Encoding", ""):
+            import zlib
+            import struct
+
+            def generate():
+                yield b'\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\xff'
+                crc = zlib.crc32(b"")
+                size = 0
+                compress = zlib.compressobj(9, zlib.DEFLATED, -zlib.MAX_WBITS)
+                with open(db.rpd_path, "rb") as f:
+                    while True:
+                        chunk = f.read(64 * 1024)
+                        if not chunk:
+                            break
+                        crc = zlib.crc32(chunk, crc)
+                        size += len(chunk)
+                        compressed = compress.compress(chunk)
+                        if compressed:
+                            yield compressed
+                yield compress.flush()
+                yield struct.pack("<II", crc & 0xFFFFFFFF, size & 0xFFFFFFFF)
+
+            headers["Content-Encoding"] = "gzip"
+            return Response(generate(), mimetype="application/octet-stream", headers=headers)
+        else:
+            def generate():
+                with open(db.rpd_path, "rb") as f:
+                    while True:
+                        chunk = f.read(64 * 1024)
+                        if not chunk:
+                            break
+                        yield chunk
+
+            return Response(generate(), mimetype="application/octet-stream", headers=headers)
 
     return app, args
 

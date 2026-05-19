@@ -30,3 +30,32 @@ def table_exists(name):
         return cur.fetchone()[0] > 0
     finally:
         conn.close()
+
+
+def column_exists(table, column):
+    if rpd_path is None:
+        return False
+    conn = get_connection()
+    try:
+        cur = conn.execute(f"PRAGMA table_info({table})")
+        return any(row[1] == column for row in cur.fetchall())
+    finally:
+        conn.close()
+
+
+def has_annotations():
+    return column_exists("rocpd_api", "domain_id")
+
+
+def has_torch_ops():
+    if not has_annotations():
+        return False
+    conn = get_connection()
+    try:
+        cur = conn.execute(
+            "SELECT count(*) FROM rocpd_api JOIN rocpd_string ON rocpd_string.id = rocpd_api.domain_id "
+            "WHERE rocpd_string.string = 'torch' LIMIT 1"
+        )
+        return cur.fetchone()[0] > 0
+    finally:
+        conn.close()

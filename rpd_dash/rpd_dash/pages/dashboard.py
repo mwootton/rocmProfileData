@@ -62,11 +62,38 @@ def layout():
                 ),
             ])
 
-        return html.Div([
-            html.H2("Dashboard"),
-            stat_cards,
-            busy_table,
-        ])
+        sections = [html.H2("Dashboard"), stat_cards, busy_table]
+
+        if db.has_annotations() and db.table_exists("api"):
+            domain_df = db.query_df(
+                "SELECT domain, count(*) as calls FROM api GROUP BY domain ORDER BY calls DESC"
+            )
+            datasources = db.query_df(
+                "SELECT tag, value FROM rocpd_metadata WHERE tag LIKE 'process_datasource%'"
+            )
+            if not domain_df.empty:
+                sections.append(html.H3("Trace Domains", style={"marginTop": "25px"}))
+                sections.append(dag.AgGrid(
+                    rowData=domain_df.to_dict("records"),
+                    columnDefs=[
+                        {"field": "domain", "headerName": "Domain", "flex": 2},
+                        {"field": "calls", "headerName": "Calls", "flex": 1,
+                         "valueFormatter": {"function": "d3.format(',')(params.value)"}},
+                    ],
+                    defaultColDef={"sortable": True, "resizable": True},
+                    style={"height": "200px"},
+                ))
+            if not datasources.empty:
+                sections.append(html.H3("Data Sources", style={"marginTop": "15px"}))
+                sections.append(dag.AgGrid(
+                    rowData=datasources.to_dict("records"),
+                    columnDefs=[
+                        {"field": "value", "headerName": "Source", "flex": 1},
+                    ],
+                    style={"height": "180px"},
+                ))
+
+        return html.Div(sections)
     except Exception as e:
         return html.Div(f"Error loading dashboard: {e}")
 
