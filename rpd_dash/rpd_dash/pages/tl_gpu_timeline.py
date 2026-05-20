@@ -94,23 +94,24 @@ def layout():
 
 def _compute_timeline(df):
     categories = {"computation": [], "communication": [], "memcpy": [], "barrier": []}
-    all_intervals = []
+    active_intervals = []
 
     for _, row in df.iterrows():
         interval = (row["start"], row["end"])
         cat = row["category"]
         if cat in categories:
             categories[cat].append(interval)
-        all_intervals.append(interval)
+        if cat != "barrier":
+            active_intervals.append(interval)
 
     merged = {cat: _merge_intervals(ivs) for cat, ivs in categories.items()}
-    merged_all = _merge_intervals(all_intervals)
+    merged_active = _merge_intervals(active_intervals)
 
     total_wall = df["end"].max() - df["start"].min()
     if total_wall <= 0:
         return [], []
 
-    busy_time = _total_time(merged_all)
+    busy_time = _total_time(merged_active)
     idle_time = total_wall - busy_time
     comp_time = _total_time(merged["computation"])
     comm_time = _total_time(merged["communication"])

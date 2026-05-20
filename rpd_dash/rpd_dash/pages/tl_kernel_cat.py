@@ -63,6 +63,11 @@ def layout():
         calls_col = "TotalCalls"
         pct_col = "Percentage"
 
+        df = df[df[name_col] != "Barrier"]
+        total_dur = df[dur_col].sum()
+        if total_dur > 0:
+            df[pct_col] = df[dur_col] * 100.0 / total_dur
+
         df["Category"] = df[name_col].apply(_categorize_kernel)
 
         cat_df = df.groupby("Category").agg(

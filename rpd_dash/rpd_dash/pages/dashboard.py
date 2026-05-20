@@ -10,7 +10,9 @@ dash.register_page(__name__, path="/", name="Dashboard")
 BUSY_SQL = """
 SELECT A.gpuId, GpuTime / 1000 as GpuTime_us, WallTime / 1000 as WallTime_us,
        GpuTime * 100.0 / WallTime as BusyPct
-FROM (SELECT gpuId, sum(end - start) as GpuTime FROM rocpd_op GROUP BY gpuId) A
+FROM (SELECT gpuId, sum(end - start) as GpuTime FROM rocpd_op
+      WHERE opType_id NOT IN (SELECT id FROM rocpd_string WHERE string = 'Barrier')
+      GROUP BY gpuId) A
 INNER JOIN (SELECT max(end) - min(start) as WallTime FROM rocpd_op)
 """
 
@@ -84,13 +86,17 @@ def layout():
                     style={"height": "200px"},
                 ))
             if not datasources.empty:
+                import re
+                sources = datasources["value"].apply(lambda v: re.sub(r".*source=", "", v))
+                unique_sources = sorted(sources.unique())
+                ds_df = [{"source": s} for s in unique_sources]
                 sections.append(html.H3("Data Sources", style={"marginTop": "15px"}))
                 sections.append(dag.AgGrid(
-                    rowData=datasources.to_dict("records"),
+                    rowData=ds_df,
                     columnDefs=[
-                        {"field": "value", "headerName": "Source", "flex": 1},
+                        {"field": "source", "headerName": "Source", "flex": 1},
                     ],
-                    style={"height": "180px"},
+                    style={"height": f"{max(120, len(ds_df) * 42 + 50)}px"},
                 ))
 
         return html.Div(sections)

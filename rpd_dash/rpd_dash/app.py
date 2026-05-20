@@ -52,7 +52,7 @@ def _create_app():
         if not os.path.isfile(args.rpd_file):
             print(f"Error: file not found: {args.rpd_file}")
             sys.exit(1)
-        db.rpd_path = os.path.abspath(args.rpd_file)
+        db.set_rpd_path(os.path.abspath(args.rpd_file))
         print(f"Loaded: {db.rpd_path}")
 
     app = dash.Dash(
@@ -94,7 +94,7 @@ def _create_app():
 
     sidebar = html.Div(
         [
-            html.H2("RPD Viewer", style={"marginBottom": "20px"}),
+            html.H2("RPD Viewer", style={"marginBottom": "20px", "color": "#ddd"}),
             html.Hr(),
             dcc.Link(id="rpd-filename", href="/file-info",
                      style={"fontSize": "12px", "color": "#aaa", "marginBottom": "15px", "display": "block", "textDecoration": "none"}),
@@ -192,7 +192,7 @@ def _create_app():
         path = path.strip()
         if not os.path.isfile(path):
             return dash.no_update, dash.no_update, dash.no_update, f"File not found: {path}"
-        db.rpd_path = path
+        db.set_rpd_path(path)
         return {"display": "flex"}, {"display": "none"}, True, ""
 
     server = app.server

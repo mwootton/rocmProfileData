@@ -59,17 +59,13 @@ def layout():
             sections.append(dag.AgGrid(
                 rowData=df.to_dict("records"),
                 columnDefs=[
-                    {"field": "domain", "headerName": "Domain", "flex": 1, "rowGroup": True, "hide": True},
+                    {"field": "domain", "headerName": "Domain", "flex": 1},
                     {"field": "category", "headerName": "Category", "flex": 1},
                     {"field": "apiName", "headerName": "API Name", "flex": 3},
                     {"field": "total_calls", "headerName": "Calls", "flex": 1, "valueFormatter": fmt_num},
                     {"field": "total_cpu_us", "headerName": "CPU Time (us)", "flex": 1, "valueFormatter": fmt_num},
                 ],
                 defaultColDef={"sortable": True, "resizable": True, "filter": True},
-                dashGridOptions={
-                    "groupDefaultExpanded": 0,
-                    "autoGroupColumnDef": {"headerName": "Domain", "minWidth": 200},
-                },
                 style={"height": "600px"},
             ))
         else:

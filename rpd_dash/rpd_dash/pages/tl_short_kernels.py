@@ -8,7 +8,9 @@ from rpd_dash.util import db
 
 dash.register_page(__name__, path="/tl/short-kernels", name="Short Kernels")
 
-SHORT_KERNEL_SQL = """
+_BARRIER_FILTER = "opType_id NOT IN (SELECT id FROM rocpd_string WHERE string = 'Barrier')"
+
+SHORT_KERNEL_SQL = f"""
 SELECT C.string as Name, count(*) as Calls,
        sum(A.end - A.start) / 1000 as TotalDuration_us,
        avg(A.end - A.start) / 1000 as AvgDuration_us,
@@ -16,23 +18,23 @@ SELECT C.string as Name, count(*) as Calls,
        max(A.end - A.start) / 1000 as MaxDuration_us
 FROM (
     SELECT opType_id as name_id, start, end FROM rocpd_op
-        WHERE description_id IN (SELECT id FROM rocpd_string WHERE string = '')
+        WHERE description_id IN (SELECT id FROM rocpd_string WHERE string = '') AND {_BARRIER_FILTER}
     UNION
     SELECT description_id, start, end FROM rocpd_op
-        WHERE description_id NOT IN (SELECT id FROM rocpd_string WHERE string = '')
+        WHERE description_id NOT IN (SELECT id FROM rocpd_string WHERE string = '') AND {_BARRIER_FILTER}
 ) A
 JOIN rocpd_string C ON C.id = A.name_id
 WHERE (A.end - A.start) / 1000 < ?
 GROUP BY Name ORDER BY TotalDuration_us DESC
 """
 
-HISTOGRAM_SQL = """
+HISTOGRAM_SQL = f"""
 SELECT (rocpd_op.end - rocpd_op.start) / 1000 as duration_us
 FROM rocpd_op
-WHERE (rocpd_op.end - rocpd_op.start) / 1000 < ?
+WHERE (rocpd_op.end - rocpd_op.start) / 1000 < ? AND {_BARRIER_FILTER}
 """
 
-TOTAL_GPU_SQL = "SELECT sum(end - start) / 1000 as total_us FROM rocpd_op"
+TOTAL_GPU_SQL = f"SELECT sum(end - start) / 1000 as total_us FROM rocpd_op WHERE {_BARRIER_FILTER}"
 
 
 def layout():
@@ -68,7 +70,7 @@ def update_content(threshold):
 
         total_short_calls = df["Calls"].sum()
         total_short_time = df["TotalDuration_us"].sum()
-        total_all_calls = db.query_df("SELECT count(*) as cnt FROM rocpd_op")["cnt"].iloc[0]
+        total_all_calls = db.query_df(f"SELECT count(*) as cnt FROM rocpd_op WHERE {_BARRIER_FILTER}")["cnt"].iloc[0]
 
         summary = html.Div([
             html.P(f"Kernels < {threshold} us: {total_short_calls:,} calls "

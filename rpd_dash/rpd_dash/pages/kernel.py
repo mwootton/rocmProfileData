@@ -33,7 +33,12 @@ def layout():
         else:
             df = db.query_df(TOP_SQL)
 
+        df = df[df["Name"] != "Barrier"]
+
         dur_col = next(c for c in df.columns if c.lower().startswith("totalduration"))
+        total_dur = df[dur_col].sum()
+        if total_dur > 0:
+            df["Percentage"] = df[dur_col] * 100.0 / total_dur
         ave_col = next(c for c in df.columns if c.lower().startswith("ave"))
 
         return html.Div([
