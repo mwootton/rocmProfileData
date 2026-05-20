@@ -21,15 +21,15 @@
 ********************************************************************************/
 #include "Logger.h"
 
-//#include "hsa_rsrc_factory.h"
-
 #include <list>
 #include <stdio.h>
 #include <stdlib.h>
 #include <dlfcn.h>
 
 #include "Utility.h"
+#include "Schema.h"
 
+using rpdtracer::Logger;
 
 #if 0
 static void rpdInit() __attribute__((constructor));
@@ -76,11 +76,14 @@ void rpd_rangePop()
 
 // GFH - This mirrors the function in the pre-refactor code.  Allows both code paths to compile.
 //   See table classes for users.  Todo: build a proper threaded record writer
-void createOverheadRecord(uint64_t start, uint64_t end, const std::string &name, const std::string &args)
+void rpdtracer::createOverheadRecord(uint64_t start, uint64_t end, const std::string &name, const std::string &args)
 {
     Logger::singleton().createOverheadRecord(start, end, name, args);
 }
 
+namespace {
+    bool loggerInitialized { false };
+}
 
 Logger& Logger::singleton()
 {
@@ -89,11 +92,23 @@ Logger& Logger::singleton()
 }
 
 void Logger::rpdInit() {
-    Logger::singleton().init();
+    bool doInit = true;
+    char *val = getenv("RPDT_DELAYINIT");
+    if (val != NULL) {
+        int delayinit = atoi(val);
+        if (delayinit != 0)
+            doInit = false;
+    }
+    if (doInit)
+        Logger::singleton();
+
+    // Indicate the tracer loaded.  Used for snooping without loading
+    setenv("RPDT_LOADED", "1", 1);
 }
 
 void Logger::rpdFinalize() {
-    Logger::singleton().finalize();
+    if (loggerInitialized)
+        Logger::singleton().finalize();
 }
 
 
@@ -102,7 +117,6 @@ void Logger::rpdstart()
     std::unique_lock<std::mutex> lock(m_activeMutex);
     if (m_activeCount == 0) {
         //fprintf(stderr, "rpd_tracer: START\n");
-        m_apiTable->resumeRoctx(clocktime_ns());
         for (auto it = m_sources.begin(); it != m_sources.end(); ++it)
             (*it)->startTracing();
     }
@@ -116,14 +130,12 @@ void Logger::rpdstop()
         //fprintf(stderr, "rpd_tracer: STOP\n");
         for (auto it = m_sources.begin(); it != m_sources.end(); ++it)
             (*it)->stopTracing();
-        m_apiTable->suspendRoctx(clocktime_ns());
     }
     --m_activeCount;
 }
 
 void Logger::rpdflush()
 {
-    std::unique_lock<std::mutex> lock(m_activeMutex);
     //fprintf(stderr, "rpd_tracer: FLUSH\n");
     const timestamp_t cb_begin_time = clocktime_ns();
 
@@ -132,10 +144,13 @@ void Logger::rpdflush()
             (*it)->flush();
 
     m_stringTable->flush();
+    m_ustringTable->flush();
     m_kernelApiTable->flush();
     m_copyApiTable->flush();
     m_opTable->flush();
     m_apiTable->flush();
+    m_monitorTable->flush();
+    m_stackFrameTable->flush();
 
     const timestamp_t cb_end_time = clocktime_ns();
     createOverheadRecord(cb_begin_time, cb_end_time, "rpdflush", "");
@@ -189,40 +204,56 @@ void Logger::init()
         filename = "./trace.rpd";
     m_filename = filename;
 
+    // Ensure schema exists
+
+    ensureSchema(filename);
+
     // Create table recorders
 
+    bool directWrite = false;
+
+    const char *dwrite = getenv("RPDT_DIRECTWRITE");
+    if (dwrite != nullptr) {
+        int val = atoi(dwrite);
+        directWrite = (val != 0);
+    }
+
     m_metadataTable = new MetadataTable(filename);
-    m_stringTable = new StringTable(filename);
-    m_kernelApiTable = new KernelApiTable(filename);
-    m_copyApiTable = new CopyApiTable(filename);
-    m_opTable = new OpTable(filename);
-    m_apiTable = new ApiTable(filename);
-    m_monitorTable = new MonitorTable(filename);
+    m_stringTable = new StringTable(filename, directWrite);
+    m_ustringTable = new UStringTable(filename, directWrite);
+    m_kernelApiTable = new KernelApiTable(filename, directWrite);
+    m_copyApiTable = new CopyApiTable(filename, directWrite);
+    m_opTable = new OpTable(filename, directWrite);
+    m_apiTable = new ApiTable(filename, directWrite);
+    m_monitorTable = new MonitorTable(filename, directWrite);
+    m_stackFrameTable = new StackFrameTable(filename, directWrite);
 
     // Offset primary keys so they do not collide between sessions
     sqlite3_int64 offset = m_metadataTable->sessionId() * (sqlite3_int64(1) << 32);
     m_metadataTable->setIdOffset(offset);
     m_stringTable->setIdOffset(offset);
+    m_ustringTable->setIdOffset(offset);
     m_kernelApiTable->setIdOffset(offset);
     m_copyApiTable->setIdOffset(offset);
     m_opTable->setIdOffset(offset);
     m_apiTable->setIdOffset(offset);
+    m_stackFrameTable->setIdOffset(offset);
 
     // Create one instance of each available datasource
     std::list<std::string> factories = {
+        "RoctxDataSourceFactory",
+        "NvtxDataSourceFactory",
+        "RocprofDataSourceFactory",
         "RoctracerDataSourceFactory",
         "CuptiDataSourceFactory",
         "RocmSmiDataSourceFactory"
         };
 
-    void (*dl) = dlopen("librpd_tracer.so", RTLD_LAZY);
-    if (dl) {
-        for (auto it = factories.begin(); it != factories.end(); ++it) {
-            DataSource* (*func) (void) = (DataSource* (*)()) dlsym(dl, (*it).c_str());
-            if (func) {
-                m_sources.push_back(func());
-                //fprintf(stderr, "Using: %s\n", (*it).c_str());
-            }
+    for (auto it = factories.begin(); it != factories.end(); ++it) {
+        DataSource* (*func) (void) = (DataSource* (*)()) dlsym(RTLD_DEFAULT, (*it).c_str());
+        if (func) {
+            m_sources.push_back(func());
+            //fprintf(stderr, "Using: %s\n", (*it).c_str());
         }
     }
 
@@ -241,9 +272,31 @@ void Logger::init()
     if (startTracing == true) {
         for (auto it = m_sources.begin(); it != m_sources.end(); ++it)
             (*it)->startTracing();
+        std::unique_lock<std::mutex> lock(m_activeMutex);
+        ++m_activeCount;
     }
     static std::once_flag register_once;
     std::call_once(register_once, atexit, Logger::rpdFinalize);
+
+    // Start autoflush hack
+    const char *autoflush = getenv("RPDT_AUTOFLUSH");
+    if (autoflush != nullptr) {
+        int frequency = atoi(autoflush);
+        if (frequency > 0) {
+            m_period = 1000000 / frequency;  // usecs
+            m_done = false;
+            m_worker = new std::thread(&Logger::autoflushWorker, this);
+        }
+    }
+
+    // Enable stack frame recording
+    const char *stackframe = getenv("RPDT_STACKFRAMES");
+    if (stackframe != nullptr) {
+        int val = atoi(stackframe);
+        m_writeStackFrames = (val != 0);
+    }
+
+    loggerInitialized = true;  // detect lazy init
 }
 
 static bool doFinalize = true;
@@ -254,6 +307,10 @@ void Logger::finalize()
     std::lock_guard<std::mutex> guard(finalizeMutex);
     if (doFinalize == true) {
         doFinalize = false;
+
+        m_done = true;
+        if (m_worker != nullptr)
+            m_worker->join();
 
         for (auto it = m_sources.begin(); it != m_sources.end(); ++it)
             (*it)->stopTracing();
@@ -267,12 +324,22 @@ void Logger::finalize()
         m_kernelApiTable->finalize();
         m_copyApiTable->finalize();
         m_monitorTable->finalize();
+        m_stackFrameTable->finalize();
         m_writeOverheadRecords = false;	// Don't make any new overhead records (api calls)
         m_apiTable->finalize();
+        m_ustringTable->finalize();
         m_stringTable->finalize();	// String table last
 
         const timestamp_t end_time = clocktime_ns();
         fprintf(stderr, "rpd_tracer: finalized in %f ms\n", 1.0 * (end_time - begin_time) / 1000000);
+    }
+}
+
+void Logger::autoflushWorker()
+{
+    while (m_done == false) {
+        rpdflush();
+        usleep(m_period);
     }
 }
 
@@ -286,7 +353,7 @@ void Logger::createOverheadRecord(uint64_t start, uint64_t end, const std::strin
     row.start = start;
     row.end = end;
     row.apiName_id = m_stringTable->getOrCreate(name);
-    row.args_id = m_stringTable->getOrCreate(args);
+    row.args_id = m_ustringTable->create(args);
     row.api_id = 0;
 
     //fprintf(stderr, "overhead: %s (%s) - %f usec\n", name.c_str(), args.c_str(), (end-start) / 1000.0);

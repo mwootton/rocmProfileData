@@ -25,6 +25,9 @@
 
 #include "Utility.h"
 
+using rpdtracer::MetadataTable;
+
+namespace rpdtracer {
 
 //const char *SCHEMA_OP = "CREATE TEMPORARY TABLE \"temp_rocpd_op\" (\"id\" integer NOT NULL PRIMARY KEY AUTOINCREMENT, \"gpuId\" integer NOT NULL, \"queueId\" integer NOT NULL, \"sequenceId\" integer NOT NULL, \"completionSignal\" varchar(18) NOT NULL, \"start\" integer NOT NULL, \"end\" integer NOT NULL, \"description_id\" integer NOT NULL REFERENCES \"rocpd_string\" (\"id\") DEFERRABLE INITIALLY DEFERRED, \"opType_id\" integer NOT NULL REFERENCES \"rocpd_string\" (\"id\") DEFERRABLE INITIALLY DEFERRED)";
 
@@ -98,3 +101,5 @@ void MetadataTablePrivate::createSession()
 
     this->sessionId = sessionId;
 }
+
+}  // namespace rpdtracer

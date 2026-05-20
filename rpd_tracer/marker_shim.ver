@@ -1,0 +1,13 @@
+ROCTX_4.1 {
+    global:
+        roctxMarkA;
+        roctxRangePushA;
+        roctxRangePop;
+};
+
+NVTX_VERSION {
+    global:
+        nvtxMarkA;
+        nvtxRangePushA;
+        nvtxRangePop;
+};

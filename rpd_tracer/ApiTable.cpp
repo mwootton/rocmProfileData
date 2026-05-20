@@ -24,13 +24,18 @@
 #include <thread>
 #include <deque>
 #include <map>
+#include <array>
+#include <mutex>
 
-#include "rpd_tracer.h"
 #include "Utility.h"
 
+using rpdtracer::ApiTable;
 
-const char *SCHEMA_API = "CREATE TEMPORARY TABLE \"temp_rocpd_api\" (\"id\" integer NOT NULL PRIMARY KEY AUTOINCREMENT, \"pid\" integer NOT NULL, \"tid\" integer NOT NULL, \"start\" integer NOT NULL, \"end\" integer NOT NULL, \"apiName_id\" integer NOT NULL REFERENCES \"rocpd_string\" (\"id\") DEFERRABLE INITIALLY DEFERRED, \"args_id\" integer NOT NULL REFERENCES \"rocpd_string\" (\"id\") DEFERRABLE INITIALLY DEFERRED)";
+namespace rpdtracer {
 
+const char *SCHEMA_API = R"|(
+CREATE TEMPORARY TABLE "temp_rocpd_api" ("id" integer NOT NULL PRIMARY KEY AUTOINCREMENT, "pid" integer NOT NULL, "tid" integer NOT NULL, "start" integer NOT NULL, "end" integer NOT NULL, "apiName_id" bigint NOT NULL REFERENCES "rocpd_string" ("id") DEFERRABLE INITIALLY DEFERRED, "category_id" bigint NOT NULL REFERENCES "rocpd_string" ("id") DEFERRABLE INITIALLY DEFERRED, "domain_id" bigint NOT NULL REFERENCES "rocpd_string" ("id") DEFERRABLE INITIALLY DEFERRED, "args_id" bigint NOT NULL REFERENCES "rocpd_ustring" ("id") DEFERRABLE INITIALLY DEFERRED)
+)|";
 
 class ApiTablePrivate
 {
@@ -44,6 +49,7 @@ public:
 
     sqlite3_stmt *apiInsert;
     sqlite3_stmt *apiInsertNoId;
+    bool directWrite;
 
     sqlite3_int64 roctxResumeTime;
 
@@ -51,16 +57,21 @@ public:
 };
 
 
-ApiTable::ApiTable(const char *basefile)
+ApiTable::ApiTable(const char *basefile, bool directWrite)
 : BufferedTable(basefile, ApiTablePrivate::BUFFERSIZE, ApiTablePrivate::BATCHSIZE)
 , d(new ApiTablePrivate(this))
 {
     int ret;
-    // set up tmp tables
-    ret = sqlite3_exec(m_connection, SCHEMA_API, NULL, NULL, NULL);
+    d->directWrite = directWrite;
 
-    ret = sqlite3_prepare_v2(m_connection, "insert into temp_rocpd_api(id, pid, tid, start, end, apiName_id, args_id) values (?,?,?,?,?,?,?)", -1, &d->apiInsert, NULL);
-    ret = sqlite3_prepare_v2(m_connection, "insert into temp_rocpd_api(pid, tid, start, end, apiName_id, args_id) values (?,?,?,?,?,?)", -1, &d->apiInsertNoId, NULL);
+    if (!directWrite) {
+        ret = sqlite3_exec(m_connection, SCHEMA_API, NULL, NULL, NULL);
+        ret = sqlite3_prepare_v2(m_connection, "insert into temp_rocpd_api(id, pid, tid, start, end, domain_id, category_id, apiName_id, args_id) values (?,?,?,?,?,?,?,?,?)", -1, &d->apiInsert, NULL);
+        ret = sqlite3_prepare_v2(m_connection, "insert into temp_rocpd_api(pid, tid, start, end, domain_id, category_id, apiName_id, args_id) values (?,?,?,?,?,?)", -1, &d->apiInsertNoId, NULL);
+    } else {
+        ret = sqlite3_prepare_v2(m_connection, "insert into rocpd_api(id, pid, tid, start, end, domain_id, category_id, apiName_id, args_id) values (?,?,?,?,?,?,?,?,?)", -1, &d->apiInsert, NULL);
+        ret = sqlite3_prepare_v2(m_connection, "insert into rocpd_api(pid, tid, start, end, domain_id, category_id, apiName_id, args_id) values (?,?,?,?,?,?)", -1, &d->apiInsertNoId, NULL);
+    }
 
     d->roctxResumeTime = 0;
 }
@@ -212,6 +223,9 @@ void ApiTable::resumeRoctx(sqlite3_int64 atTime)
 
 void ApiTable::flushRows()
 {
+    if (d->directWrite)
+        return;
+
     int ret = 0;
     ret = sqlite3_exec(m_connection, "begin transaction", NULL, NULL, NULL);
     ret = sqlite3_exec(m_connection, "insert into rocpd_api select * from temp_rocpd_api", NULL, NULL, NULL);
@@ -249,6 +263,8 @@ void ApiTable::writeRows()
         sqlite3_bind_int(d->apiInsert, index++, r.tid);
         sqlite3_bind_int64(d->apiInsert, index++, r.start);
         sqlite3_bind_int64(d->apiInsert, index++, r.end);
+        sqlite3_bind_int64(d->apiInsert, index++, r.domain_id + m_idOffset);
+        sqlite3_bind_int64(d->apiInsert, index++, r.category_id + m_idOffset);
         sqlite3_bind_int64(d->apiInsert, index++, r.apiName_id + m_idOffset);
         sqlite3_bind_int64(d->apiInsert, index++, r.args_id + m_idOffset);
         int ret = sqlite3_step(d->apiInsert);
@@ -267,3 +283,5 @@ void ApiTable::writeRows()
     std::snprintf(buff, 4096, "count=%d | remaining=%d", end - start + 1, m_head - m_tail);
     createOverheadRecord(cb_begin_time, cb_end_time, "ApiTable::writeRows", buff);
 }
+
+}  // namespace rpdtracer

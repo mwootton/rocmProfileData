@@ -4,8 +4,11 @@
 #pragma once
 
 #include <sqlite3.h>
+#include <string>
 #include <mutex>
 #include <condition_variable>
+
+namespace rpdtracer {
 
 class Table
 {
@@ -60,7 +63,7 @@ class StringTablePrivate;
 class StringTable: public BufferedTable
 {
 public:
-    StringTable(const char *basefile);
+    StringTable(const char *basefile, bool directWrite = false);
     virtual ~StringTable();
 
     struct row {
@@ -80,11 +83,35 @@ private:
 };
 
 
+class UStringTablePrivate;
+class UStringTable: public BufferedTable
+{
+public:
+    UStringTable(const char *basefile, bool directWrite = false);
+    virtual ~UStringTable();
+
+    struct row {
+        std::string string;
+        sqlite3_int64 string_id;
+    };
+
+    //void insert(const row&);
+    sqlite3_int64 create(const std::string&);
+
+private:
+    UStringTablePrivate *d;
+    friend class UStringTablePrivate;
+
+    virtual void writeRows() override;
+    virtual void flushRows() override;
+};
+
+
 class ApiTablePrivate;
 class ApiTable: public BufferedTable
 {
 public:
-    ApiTable(const char *basefile);
+    ApiTable(const char *basefile, bool directWrite = false);
     virtual ~ApiTable();
 
     struct row {
@@ -92,12 +119,15 @@ public:
         int tid;
         sqlite3_int64 start;
         sqlite3_int64 end;
+        sqlite3_int64 domain_id;
+        sqlite3_int64 category_id;
         sqlite3_int64 apiName_id;
         sqlite3_int64 args_id;
         sqlite3_int64 api_id;  // correlation id
     };
 
     void insert(const row&);
+    // TODO: remove once Logger::createOverheadRecord and Logger::rpd_rangePush/rpd_rangePop are migrated
     void insertRoctx(row&);
     void pushRoctx(const row&);
     void popRoctx(const row&);
@@ -117,7 +147,7 @@ class KernelApiTablePrivate;
 class KernelApiTable: public BufferedTable
 {
 public:
-    KernelApiTable(const char *basefile);
+    KernelApiTable(const char *basefile, bool directWrite = false);
     virtual ~KernelApiTable();
 
     struct row {
@@ -153,7 +183,7 @@ class CopyApiTablePrivate;
 class CopyApiTable: public BufferedTable
 {
 public:
-    CopyApiTable(const char *basefile);
+    CopyApiTable(const char *basefile, bool directWrite = false);
     virtual ~CopyApiTable();
 
     struct row {
@@ -166,6 +196,7 @@ public:
         int dstDevice {0};
         int srcDevice {0};
         int kind {0};
+        std::string kindStr;
         bool sync {false};
         bool pinned {false};
         sqlite3_int64 api_id {0};   // Baseclass ApiTable primary key (correlation id)
@@ -209,14 +240,13 @@ class OpTablePrivate;
 class OpTable: public BufferedTable
 {
 public:
-    OpTable(const char *basefile);
+    OpTable(const char *basefile, bool directWrite = false);
     virtual ~OpTable();
 
     struct row {
         int gpuId;
         int queueId;
         int sequenceId;
-        char completionSignal[18];
         sqlite3_int64 start;
         sqlite3_int64 end;
         sqlite3_int64 description_id;
@@ -257,7 +287,7 @@ class MonitorTablePrivate;
 class MonitorTable: public BufferedTable
 {
 public:
-    MonitorTable(const char *basefile);
+    MonitorTable(const char *basefile, bool directWrite = false);
     virtual ~MonitorTable();
 
     struct row {
@@ -279,3 +309,29 @@ private:
     virtual void writeRows() override;
     virtual void flushRows() override;
 };
+
+
+class StackFrameTablePrivate;
+class StackFrameTable: public BufferedTable
+{
+public:
+    StackFrameTable(const char *basefile, bool directWrite = false);
+    virtual ~StackFrameTable();
+
+    struct row {
+        sqlite3_int64 api_id {0};   // ApiTable primary key (correlation id)
+        int depth;
+        sqlite3_int64 name_id;
+    };
+
+    void insert(const row&);
+
+private:
+    StackFrameTablePrivate *d;
+    friend class StackFrameTablePrivate;
+
+    virtual void writeRows() override;
+    virtual void flushRows() override;
+};
+
+}    // namespace rpdtracer

@@ -6,6 +6,9 @@
 
 #include <thread>
 
+using rpdtracer::BufferedTable;
+
+namespace rpdtracer {
 
 class BufferedTablePrivate
 {
@@ -16,6 +19,7 @@ public:
     std::thread *worker;
     bool done;
     bool workerRunning;
+    bool flushRequested;
 
     BufferedTable *p;
 };
@@ -28,6 +32,7 @@ BufferedTable::BufferedTable(const char *basefile, int bufferSize, int batchsize
 {
     d->done = false;
     d->workerRunning = true;
+    d->flushRequested = false;
     d->worker = new std::thread(&BufferedTablePrivate::work, d);
 }
 
@@ -42,17 +47,10 @@ void BufferedTable::flush()
 {
     std::unique_lock<std::mutex> lock(m_mutex);
 
-    // wait for worker to pause
-    while (d->workerRunning == true)
+    d->flushRequested = true;
+    m_wait.notify_one();
+    while (d->flushRequested)
         m_wait.wait(lock);
-
-    // Worker paused, clear the buffer ourselves
-    auto flushPoint = m_head;
-    while (flushPoint > m_tail) {
-        lock.unlock();
-        writeRows();
-        lock.lock();
-    }
 
     // Table specific flush
     flushRows();	// While holding m_mutex
@@ -69,7 +67,7 @@ void BufferedTable::finalize()
     d->workerRunning = false;
     delete d->worker;
 
-    flush();
+    flushRows();
 }
 
 
@@ -89,10 +87,26 @@ void BufferedTablePrivate::work()
             p->m_wait.notify_all();
             lock.lock();
         }
+        if (flushRequested) {
+            while (p->m_head > p->m_tail) {
+                lock.unlock();
+                p->writeRows();
+                lock.lock();
+            }
+            flushRequested = false;
+            p->m_wait.notify_all();
+        }
         workerRunning = false;
         if (done == false)
             p->m_wait.wait(lock);
         workerRunning = true;
     }
+    // done: drain remaining rows before exit
+    while (p->m_head > p->m_tail) {
+        lock.unlock();
+        p->writeRows();
+        lock.lock();
+    }
 }
 
+}  // namespace rpdtracer

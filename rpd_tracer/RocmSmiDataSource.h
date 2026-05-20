@@ -11,8 +11,7 @@
 #include <mutex>
 #include <condition_variable>
 
-
-
+namespace rpdtracer {
 
 class RocmSmiDataSource : public DataSource
 {
@@ -37,3 +36,4 @@ private:
     sqlite3_int64 m_period { 10000 };
 };
 
+}    // namespace rpdtracer

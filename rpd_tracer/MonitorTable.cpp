@@ -23,10 +23,15 @@
 
 #include <thread>
 #include <map>
+#include <array>
+#include <mutex>
 
 #include "rpd_tracer.h"
 #include "Utility.h"
 
+using rpdtracer::MonitorTable;
+
+namespace rpdtracer {
 
 const char *SCHEMA_MONITOR = "CREATE TEMPORARY TABLE \"temp_rocpd_monitor\" (\"id\" integer NOT NULL PRIMARY KEY AUTOINCREMENT, \"deviceType\" varchar(16) NOT NULL, \"deviceId\" integer NOT NULL, \"monitorType\" varchar(16) NOT NULL, \"start\" integer NOT NULL, \"end\" integer NOT NULL, \"value\" varchar(255) NOT NULL)";
 
@@ -39,6 +44,7 @@ public:
     std::array<MonitorTable::row, BUFFERSIZE> rows; // Circular buffer
 
     sqlite3_stmt *monitorInsert;
+    bool directWrite;
 
     class rowCompare
     {
@@ -58,16 +64,19 @@ public:
 };
 
 
-MonitorTable::MonitorTable(const char *basefile)
+MonitorTable::MonitorTable(const char *basefile, bool directWrite)
 : BufferedTable(basefile, MonitorTablePrivate::BUFFERSIZE, MonitorTablePrivate::BATCHSIZE)
 , d(new MonitorTablePrivate(this))
 {
     int ret;
-    // set up tmp tables
-    ret = sqlite3_exec(m_connection, SCHEMA_MONITOR, NULL, NULL, NULL);
+    d->directWrite = directWrite;
 
-    // prepare queries to insert row
-    ret = sqlite3_prepare_v2(m_connection, "insert into temp_rocpd_monitor(deviceType, deviceId, monitorType, start, end, value) values (?,?,?,?,?,?)", -1, &d->monitorInsert, NULL);
+    if (!directWrite) {
+        ret = sqlite3_exec(m_connection, SCHEMA_MONITOR, NULL, NULL, NULL);
+        ret = sqlite3_prepare_v2(m_connection, "insert into temp_rocpd_monitor(deviceType, deviceId, monitorType, start, end, value) values (?,?,?,?,?,?)", -1, &d->monitorInsert, NULL);
+    } else {
+        ret = sqlite3_prepare_v2(m_connection, "insert into rocpd_monitor(deviceType, deviceId, monitorType, start, end, value) values (?,?,?,?,?,?)", -1, &d->monitorInsert, NULL);
+    }
 }
 
 
@@ -137,6 +146,9 @@ void MonitorTable::endCurrentRuns(sqlite3_int64 endTimestamp)
 
 void MonitorTable::flushRows()
 {
+    if (d->directWrite)
+        return;
+
     int ret = 0;
     ret = sqlite3_exec(m_connection, "begin transaction", NULL, NULL, NULL);
     ret = sqlite3_exec(m_connection, "insert into rocpd_monitor(deviceType, deviceId, monitorType, start, end, value) select deviceType, deviceId, monitorType, start, end, value from temp_rocpd_monitor", NULL, NULL, NULL);
@@ -185,3 +197,5 @@ void MonitorTable::writeRows()
     std::snprintf(buff, 4096, "count=%d | remaining=%d", end - start + 1, m_head - m_tail);
     createOverheadRecord(cb_begin_time, cb_end_time, "MonitorTable::writeRows", buff);
 }
+
+}  // namespace rpdtracer

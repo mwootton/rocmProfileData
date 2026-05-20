@@ -4,8 +4,9 @@
 #pragma once
 
 #include <sqlite3.h>
-#include <mutex>
-#include <condition_variable>
+#include <string>
+
+namespace rpdtracer {
 
 class DbResourcePrivate;
 class DbResource
@@ -24,3 +25,5 @@ private:
     DbResourcePrivate *d;
     friend class DbResourcePrivate;
 };
+
+}    // namespace rpdtracer

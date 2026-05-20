@@ -43,7 +43,7 @@ def createSubclassTable(importData, baseClass, subClass, events, argTypes):
     if baseClass != 'api' and baseClass != 'op':
         raise("baseClass must be 'api' or 'op'")
     queryString = \
-        'select distinct B.string from rocpd_api A join rocpd_string B on B.id = A.args_id where A.apiName_id in\n\
+        'select distinct B.string from rocpd_api A join rocpd_ustring B on B.id = A.args_id where A.apiName_id in\n\
             (select id from rocpd_string where string in (%s))' \
         if baseClass == 'api' else \
         'select distinct B.string from rocpd_op A join rocpd_string B on B.id = A.description_id where A.opType_id in\n\
@@ -107,7 +107,7 @@ def createSubclassTable(importData, baseClass, subClass, events, argTypes):
 
     # Fetch the rows to generate subclass rows
     queryString = \
-        'select A.id, B.string from rocpd_api A join rocpd_string B on B.id = A.args_id where A.apiName_id in\n\
+        'select A.id, B.string from rocpd_api A join rocpd_ustring B on B.id = A.args_id where A.apiName_id in\n\
             (select id from rocpd_string where string in (%s))' \
         if baseClass == 'api' else \
         'select A.id, B.string from rocpd_op A join rocpd_string B on B.id = A.description_id where A.opType_id in\n\

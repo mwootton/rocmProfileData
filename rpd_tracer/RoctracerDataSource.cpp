@@ -21,17 +21,20 @@
 ********************************************************************************/
 #include "RoctracerDataSource.h"
 
-//#include "hsa_rsrc_factory.h"
-
 #include <roctracer_hip.h>
 #include <roctracer_ext.h>
-#include <roctracer_roctx.h>
+
+#include <hsa/hsa_ext_amd.h>
 
 #include <sqlite3.h>
 #include <fmt/format.h>
 
 #include "Logger.h"
 #include "Utility.h"
+
+using rpdtracer::DataSource;
+using rpdtracer::RoctracerDataSource;
+using rpdtracer::RocmApiIdList;
 
 
 // Create a factory for the Logger to locate and use
@@ -76,6 +79,35 @@ typedef enum {
 } hip_op_barrier_kind_t_;
 // end hip op defines
 
+namespace {
+    int deviceOffset = 0x7fffffff;
+
+    void createDeviceMap() {
+        int dc = 0;
+        int ret = hipGetDeviceCount(&dc);
+        hsa_iterate_agents(
+            [](hsa_agent_t agent, void* data) {
+           auto &deviceOffset = *static_cast<int*>(data);
+           int nodeId;
+           hsa_agent_get_info(
+                agent,
+                static_cast<hsa_agent_info_t>(HSA_AMD_AGENT_INFO_DRIVER_NODE_ID),
+                &nodeId);
+           int deviceType;
+           hsa_agent_get_info(
+                agent,
+                static_cast<hsa_agent_info_t>(HSA_AGENT_INFO_DEVICE),
+                &deviceType);
+           if ((nodeId < deviceOffset) && (deviceType == HSA_DEVICE_TYPE_GPU))
+               deviceOffset = nodeId;
+
+           return HSA_STATUS_SUCCESS;
+      } , &deviceOffset);
+    };
+
+    int mapDeviceId(int id) { return id - deviceOffset; };
+} // namespace
+
 
 void RoctracerDataSource::api_callback(
     uint32_t domain,
@@ -96,12 +128,16 @@ void RoctracerDataSource::api_callback(
             char buff[4096];
             ApiTable::row row;
 
+            static sqlite3_int64 domain_id = logger.stringTable().getOrCreate("hip");
+
             const char *name = roctracer_op_string(ACTIVITY_DOMAIN_HIP_API, cid, 0);
             sqlite3_int64 name_id = logger.stringTable().getOrCreate(name);
             row.pid = GetPid();
             row.tid = GetTid();
             row.start = timestamp;  // From TLS from preceding enter call
             row.end = clocktime_ns();
+            row.domain_id = domain_id;
+            row.category_id = EMPTY_STRING_ID;
             row.apiName_id = name_id;
             row.args_id = EMPTY_STRING_ID;
             row.api_id = data->correlation_id;
@@ -111,12 +147,12 @@ void RoctracerDataSource::api_callback(
                     std::snprintf(buff, 4096, "ptr=%p | size=0x%x",
                         *data->args.hipMalloc.ptr,
                         (uint32_t)(data->args.hipMalloc.size));
-                    row.args_id = logger.stringTable().getOrCreate(std::string(buff)); 
+                    row.args_id = logger.ustringTable().create(std::string(buff));
                     break;
                 case HIP_API_ID_hipFree:
                     std::snprintf(buff, 4096, "ptr=%p",
                         data->args.hipFree.ptr);
-                    row.args_id = logger.stringTable().getOrCreate(std::string(buff)); 
+                    row.args_id = logger.ustringTable().create(std::string(buff));
                     break;
 
                 case HIP_API_ID_hipLaunchCooperativeKernelMultiDevice:
@@ -690,27 +726,27 @@ void RoctracerDataSource::api_callback(
                     }
                     break;
                 case HIP_API_ID_hipStreamBeginCapture:
-                    row.args_id = logger.stringTable().getOrCreate(
+                    row.args_id = logger.ustringTable().create(
                         fmt::format("stream = {} | mode = {}", (void*)data->args.hipStreamBeginCapture.stream, data->args.hipStreamBeginCapture.mode)
                     );
                     break;
                 case HIP_API_ID_hipStreamEndCapture:
-                    row.args_id = logger.stringTable().getOrCreate(
+                    row.args_id = logger.ustringTable().create(
                         fmt::format("stream = {} | graph = {}", (void*)data->args.hipStreamEndCapture.stream, (void*)*(data->args.hipStreamEndCapture.pGraph))
                     );
                     break;
                 case HIP_API_ID_hipGraphInstantiate:
-                    row.args_id = logger.stringTable().getOrCreate(
+                    row.args_id = logger.ustringTable().create(
                         fmt::format("graphExec = {} | graph = {}", (void *)*(data->args.hipGraphInstantiate.pGraphExec), (void *)data->args.hipGraphInstantiate.graph)
                     );
                     break;
                 case HIP_API_ID_hipGraphInstantiateWithFlags:
-                    row.args_id = logger.stringTable().getOrCreate(
+                    row.args_id = logger.ustringTable().create(
                         fmt::format("graphExec = {} | graph = {}", (void *)*(data->args.hipGraphInstantiateWithFlags.pGraphExec), (void *)data->args.hipGraphInstantiateWithFlags.graph)
                     );
                     break;
                 case HIP_API_ID_hipGraphLaunch:
-                    row.args_id = logger.stringTable().getOrCreate(
+                    row.args_id = logger.ustringTable().create(
                         fmt::format("graphExec = {} | stream = {}", (void *)data->args.hipGraphLaunch.graphExec, (void *)data->args.hipGraphLaunch.stream)
                     );
                     break;
@@ -719,38 +755,10 @@ void RoctracerDataSource::api_callback(
             }
 #endif
             logger.apiTable().insert(row);
+            unwind(logger, name, row.api_id);
         }
     }
 
-    if (domain == ACTIVITY_DOMAIN_ROCTX) {
-        const roctx_api_data_t* data = (const roctx_api_data_t*)(callback_data);
-
-        ApiTable::row row;
-        row.pid = GetPid();
-        row.tid = GetTid();
-        row.start = clocktime_ns();
-        row.end = row.start;
-        static sqlite3_int64 markerId = logger.stringTable().getOrCreate(std::string("UserMarker"));
-        row.apiName_id = markerId;
-        row.args_id = EMPTY_STRING_ID;
-        row.api_id = 0;
-
-        switch (cid) {
-            case ROCTX_API_ID_roctxMarkA:
-                row.args_id = logger.stringTable().getOrCreate(data->args.message);
-                logger.apiTable().insertRoctx(row);
-                break;
-            case ROCTX_API_ID_roctxRangePushA:
-                row.args_id = logger.stringTable().getOrCreate(data->args.message);
-                logger.apiTable().pushRoctx(row);
-                break;
-            case ROCTX_API_ID_roctxRangePop:
-                logger.apiTable().popRoctx(row);
-                break;
-            default:
-                break;
-        }
-    }
     std::call_once(register_once, atexit, Logger::rpdFinalize);
 }
 
@@ -839,10 +847,9 @@ void RoctracerDataSource::hcc_activity_callback(const char* begin, const char* e
             sqlite3_int64 name_id = logger.stringTable().getOrCreate(name);
 
             OpTable::row row;
-            row.gpuId = record->device_id;
+            row.gpuId = mapDeviceId(record->device_id);
             row.queueId = record->queue_id;
             row.sequenceId = 0;
-            strncpy(row.completionSignal, "", 18);
             row.start = record->begin_ns + toffset;
             row.end = record->end_ns + toffset;
             row.description_id = ((record->kind == HIP_OP_DISPATCH_KIND_KERNEL_)
@@ -868,6 +875,7 @@ void RoctracerDataSource::hcc_activity_callback(const char* begin, const char* e
 
 
 void RoctracerDataSource::init() {
+    createDeviceMap();
 
     // Pick some apis to ignore
     m_apiList.setInvertMode(true);  // Omit the specified api
@@ -889,8 +897,6 @@ void RoctracerDataSource::init() {
     roctracer_set_properties(ACTIVITY_DOMAIN_HIP_API, NULL);
 
     // Enable API callbacks
-    roctracer_enable_domain_callback(ACTIVITY_DOMAIN_ROCTX, api_callback, NULL);
-
     if (m_apiList.invertMode() == true) {
         // exclusion list - enable entire domain and turn off things in list
         roctracer_enable_domain_callback(ACTIVITY_DOMAIN_HIP_API, api_callback, NULL);
@@ -927,6 +933,8 @@ void RoctracerDataSource::init() {
     roctracer_open_pool_expl(&hcc_cb_properties, &m_hccPool);
     roctracer_enable_domain_activity_expl(ACTIVITY_DOMAIN_HCC_OPS, m_hccPool);
 #endif
+
+    //createDeviceMap();
     stopTracing();
 }
 
@@ -948,7 +956,6 @@ void RoctracerDataSource::flush() {
 void RoctracerDataSource::end() {
     roctracer_stop();
     roctracer_disable_domain_callback(ACTIVITY_DOMAIN_HIP_API);
-    roctracer_disable_domain_callback(ACTIVITY_DOMAIN_ROCTX);
 
     roctracer_disable_domain_activity(ACTIVITY_DOMAIN_HIP_API);
     roctracer_disable_domain_activity(ACTIVITY_DOMAIN_HSA_OPS);

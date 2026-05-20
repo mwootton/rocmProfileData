@@ -4,7 +4,7 @@ PACKAGE = rocpd
 
 install:
 	@echo "Building rocpd_python"
-	pip install --user .
+	pip install .
 
 develop:
 	@echo "Building $(PACKAGE)"

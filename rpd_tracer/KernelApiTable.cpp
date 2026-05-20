@@ -22,12 +22,19 @@
 #include "Table.h"
 
 #include <thread>
+#include <array>
+#include <mutex>
 
 #include "rpd_tracer.h"
 #include "Utility.h"
 
+using rpdtracer::KernelApiTable;
 
-const char *SCHEMA_KERNELAPI = "CREATE TEMPORARY TABLE \"temp_rocpd_kernelapi\" (\"api_ptr_id\" integer NOT NULL PRIMARY KEY, \"stream\" varchar(18) NOT NULL, \"gridX\" integer NOT NULL, \"gridY\" integer NOT NULL, \"gridz\" integer NOT NULL, \"workgroupX\" integer NOT NULL, \"workgroupY\" integer NOT NULL, \"workgroupZ\" integer NOT NULL, \"groupSegmentSize\" integer NOT NULL, \"privateSegmentSize\" integer NOT NULL, \"kernelArgAddress\" varchar(18) NOT NULL, \"aquireFence\" varchar(8) NOT NULL, \"releaseFence\" varchar(8) NOT NULL, \"codeObject_id\" integer, \"kernelName_id\" integer NOT NULL)";
+namespace rpdtracer {
+
+const char *SCHEMA_KERNELAPI = R"|(
+CREATE TEMPORARY TABLE  "temp_rocpd_kernelapi" ("api_ptr_id" bigint NOT NULL PRIMARY KEY REFERENCES "rocpd_api" ("id") DEFERRABLE INITIALLY DEFERRED, "stream" varchar(18) NOT NULL, "gridX" integer NOT NULL, "gridY" integer NOT NULL, "gridZ" integer NOT NULL, "workgroupX" integer NOT NULL, "workgroupY" integer NOT NULL, "workgroupZ" integer NOT NULL, "groupSegmentSize" integer NOT NULL, "privateSegmentSize" integer NOT NULL, "kernelName_id" bigint NOT NULL REFERENCES "rocpd_string" ("id") DEFERRABLE INITIALLY DEFERRED)
+)|";
 
 class KernelApiTablePrivate
 {
@@ -38,21 +45,25 @@ public:
     std::array<KernelApiTable::row, BUFFERSIZE> rows; // Circular buffer
 
     sqlite3_stmt *apiInsert;
+    bool directWrite;
 
     KernelApiTable *p;
 };
 
 
-KernelApiTable::KernelApiTable(const char *basefile)
+KernelApiTable::KernelApiTable(const char *basefile, bool directWrite)
 : BufferedTable(basefile, KernelApiTablePrivate::BUFFERSIZE, KernelApiTablePrivate::BATCHSIZE)
 , d(new KernelApiTablePrivate(this))
 {
     int ret;
-    // set up tmp table
-    ret = sqlite3_exec(m_connection, SCHEMA_KERNELAPI, NULL, NULL, NULL);
+    d->directWrite = directWrite;
 
-    // prepare queries to insert row
-    ret = sqlite3_prepare_v2(m_connection, "insert into temp_rocpd_kernelapi(api_ptr_id, stream, gridX, gridY, gridz, workgroupX, workgroupY, workgroupZ, groupSegmentSize, privateSegmentSize, kernelArgAddress, aquireFence, releaseFence, codeObject_id, kernelName_id) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", -1, &d->apiInsert, NULL);
+    if (!directWrite) {
+        ret = sqlite3_exec(m_connection, SCHEMA_KERNELAPI, NULL, NULL, NULL);
+        ret = sqlite3_prepare_v2(m_connection, "insert into temp_rocpd_kernelapi(api_ptr_id, stream, gridX, gridY, gridz, workgroupX, workgroupY, workgroupZ, groupSegmentSize, privateSegmentSize, kernelName_id) values (?,?,?,?,?,?,?,?,?,?,?)", -1, &d->apiInsert, NULL);
+    } else {
+        ret = sqlite3_prepare_v2(m_connection, "insert into rocpd_kernelapi(api_ptr_id, stream, gridX, gridY, gridz, workgroupX, workgroupY, workgroupZ, groupSegmentSize, privateSegmentSize, kernelName_id) values (?,?,?,?,?,?,?,?,?,?,?)", -1, &d->apiInsert, NULL);
+    }
 }
 
 
@@ -82,6 +93,9 @@ void KernelApiTable::insert(const KernelApiTable::row &row)
 
 void KernelApiTable::flushRows()
 {
+    if (d->directWrite)
+        return;
+
     int ret = 0;
     ret = sqlite3_exec(m_connection, "begin transaction", NULL, NULL, NULL);
     ret = sqlite3_exec(m_connection, "insert into rocpd_kernelapi select * from temp_rocpd_kernelapi", NULL, NULL, NULL);
@@ -123,10 +137,6 @@ void KernelApiTable::writeRows()
         sqlite3_bind_int(d->apiInsert, index++, r.workgroupZ);
         sqlite3_bind_int(d->apiInsert, index++, r.groupSegmentSize);
         sqlite3_bind_int(d->apiInsert, index++, r.privateSegmentSize);
-        sqlite3_bind_text(d->apiInsert, index++, "", -1, SQLITE_STATIC);
-        sqlite3_bind_text(d->apiInsert, index++, "", -1, SQLITE_STATIC);
-        sqlite3_bind_text(d->apiInsert, index++, "", -1, SQLITE_STATIC);
-        sqlite3_bind_text(d->apiInsert, index++, "", -1, SQLITE_STATIC);
         sqlite3_bind_int64(d->apiInsert, index++, r.kernelName_id + m_idOffset);
         int ret = sqlite3_step(d->apiInsert);
         sqlite3_reset(d->apiInsert);
@@ -144,3 +154,5 @@ void KernelApiTable::writeRows()
     std::snprintf(buff, 4096, "count=%d | remaining=%d", end - start + 1, m_head - m_tail);
     createOverheadRecord(cb_begin_time, cb_end_time, "KernelApiTable::writeRows", buff);
 }
+
+}  // namespace rpdtracer

@@ -23,6 +23,10 @@
 
 #include <fmt/format.h>
 
+using rpdtracer::DbResource;
+
+namespace rpdtracer {
+
 class DbResourcePrivate
 {
 public:
@@ -30,9 +34,6 @@ public:
 
     sqlite3 *connection;
     std::string resourceName;
-
-    //std::mutex m_mutex;
-    //std::condition_variable m_wait;
 
     bool locked {false};
 
@@ -113,3 +114,5 @@ bool DbResource::isLocked()
 {
     return d->locked;
 }
+
+}  // namespace rpdtracer

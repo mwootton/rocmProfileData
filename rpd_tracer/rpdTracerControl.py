@@ -25,6 +25,7 @@ from ctypes import CDLL
 from ctypes.util import find_library
 import platform
 import multiprocessing
+import threading
 import os
 import sys
 import sqlite3
@@ -41,32 +42,25 @@ class rpdTracerControl:
     __filename = "trace.rpd"
     __rpd = None    # the dll/
     __initFile = True
+    __active = True
 
     @classmethod
     def loadLibrary(cls):
-        if cls.__rpd == None:
+        if cls.__rpd == None and cls.__active == True:
             os.environ["RPDT_AUTOSTART"] = "0"
             cls.__rpd = CDLL(find_library("rpd_tracer"))
 
     @classmethod
     def initializeFile(cls):
         # Only the top parent process will initialize the trace file
-        if isChildProcess():
+        if isChildProcess() or os.getenv("RPDT_FILENAME"):
             cls.__initFile = False
-
-        if cls.__initFile == True:
+        if cls.__initFile == True and cls.__active == True:
             if os.path.exists(cls.__filename):
                 os.remove(cls.__filename)
-            # Create new file and write schema
-            schema = RocpdSchema()
-            connection = sqlite3.connect(cls.__filename)
-            schema.writeSchema(connection)
-            connection.commit()
-            connection.close()
-            #
-            os.environ["RPDT_FILENAME"] = cls.__filename
+            # Schema added to new file by tracer
             cls.__initFile = False   
-
+        os.environ["RPDT_FILENAME"] = cls.__filename
 
     # You can set the output filename and optionally append to an exiting file.
     #   This must be done on the main process before any class instances are created.
@@ -77,15 +71,32 @@ class rpdTracerControl:
 
     @classmethod
     def setFilename(cls, name, append = False):
+        if os.getenv("RPDT_FILENAME"):
+            cls.__filename = os.getenv("RPDT_FILENAME")
+            if name != cls.__filename:
+                raise Warning(f"RPDT_FILENAME is already initialized. Logging into {cls.__filename}")
+            return
+
         if cls.__rpd != None:
             raise RuntimeError("Trace file name can not be changed once logging")
         if isChildProcess():
             raise RuntimeError("Trace file name can not be changed by sub-processes")
 
+
         cls.__filename = name
+        #os.environ["RPDT_FILENAME"] = cls.__filename
         if append:
-            os.environ["RPDT_FILENAME"] = cls.__filename
             cls.__initFile = False
+
+    @classmethod
+    def skipCreate(cls):
+        cls.__initFile = False
+
+    @classmethod
+    def skipLoad(cls):
+       # If the tracer is not already loaded, then everything is a no-op.
+       if os.environ.get("RPDT_LOADED") == None:
+           cls.__active = False
 
     def __init__(self):
         rpdTracerControl.initializeFile()
@@ -95,13 +106,16 @@ class rpdTracerControl:
         pass
 
     def start(self):
-        rpdTracerControl.__rpd.rpdstart()
+        if rpdTracerControl.__rpd:
+            rpdTracerControl.__rpd.rpdstart()
 
     def stop(self):
-        rpdTracerControl.__rpd.rpdstop()
+        if rpdTracerControl.__rpd:
+            rpdTracerControl.__rpd.rpdstop()
 
     def flush(self):
-        rpdTracerControl.__rpd.rpdflush()
+        if rpdTracerControl.__rpd:
+            rpdTracerControl.__rpd.rpdflush()
 
     def __enter__(self):
         self.start()
@@ -110,10 +124,12 @@ class rpdTracerControl:
         self.stop()
 
     def rangePush(self, domain: str, apiName: str, args: str):
-        rpdTracerControl.__rpd.rpd_rangePush(bytes(domain, encoding='utf-8'), bytes(apiName, encoding='utf-8'), bytes(args, encoding='utf-8'))
+        if rpdTracerControl.__rpd:
+            rpdTracerControl.__rpd.rpd_rangePush(bytes(domain, encoding='utf-8'), bytes(apiName, encoding='utf-8'), bytes(args, encoding='utf-8'))
 
     def rangePop(self):
-        rpdTracerControl.__rpd.rpd_rangePop()
+        if rpdTracerControl.__rpd:
+            rpdTracerControl.__rpd.rpd_rangePop()
 
 
     # python stack tracing
@@ -129,5 +145,16 @@ class rpdTracerControl:
     def setPythonTrace(self, doTrace: bool):
         if doTrace:
             sys.setprofile(self.__trace_callback)
+            try:
+                threading.setprofile_all_threads(self.__trace_callback)	#python 3.12+
+            except:
+                threading.setprofile(self.__trace_callback)
+                # FIXME: handle running threads
         else:
             sys.setprofile(None)
+            try:
+                threading.setprofile_all_threads(None)	#python 3.12+
+            except:
+                threading.setprofile(None)
+                # FIXME: handle running threads
+

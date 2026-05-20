@@ -21,9 +21,13 @@
 ********************************************************************************/
 #pragma once
 
+#include <cstdint>
+
 #include <string>
 #include <map>
 #include <unordered_map>
+#include <cstddef>
+#include <cstdint>
 
 //#include <roctracer_hip.h>
 
@@ -31,6 +35,8 @@
 //   contains() are items you are interested in, i.e. matches the filter
 //   "normal mode": things you add() are the only things matching the filter
 //   invertMode() == true: All things match filter except what you add()
+
+namespace rpdtracer {
 
 class ApiIdList
 {
@@ -53,4 +59,6 @@ private:
   std::unordered_map<uint32_t, uint32_t> m_filter;	// apiId -> "1"
   bool m_invert;
 };
+
+}    // namespace rpdtracer
 
