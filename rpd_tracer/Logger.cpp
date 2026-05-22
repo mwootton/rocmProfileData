@@ -55,13 +55,7 @@ Logger& Logger::singleton()
 }
 
 void Logger::rpdInit() {
-    bool doInit = true;
-    char *val = getenv("RPDT_DELAYINIT");
-    if (val != NULL) {
-        int delayinit = atoi(val);
-        if (delayinit != 0)
-            doInit = false;
-    }
+    bool doInit = (atoi(getConfig("RPDT_DELAYINIT", "delayinit", "0")) == 0);
     if (doInit)
         Logger::singleton();
 
@@ -166,7 +160,6 @@ void Logger::init()
 
     rlogClientInit();
 
-    rlog::getProperty("rpd_tracer", "filename", "./trace.rpd");
     const char *filename = getConfig("RPDT_FILENAME", "filename", "./trace.rpd");
     m_filename = filename;
 
@@ -176,13 +169,7 @@ void Logger::init()
 
     // Create table recorders
 
-    bool directWrite = false;
-
-    const char *dwrite = getenv("RPDT_DIRECTWRITE");
-    if (dwrite != nullptr) {
-        int val = atoi(dwrite);
-        directWrite = (val != 0);
-    }
+    bool directWrite = (atoi(getConfig("RPDT_DIRECTWRITE", "directwrite", "0")) != 0);
 
     m_metadataTable = new MetadataTable(filename);
     m_stringTable = new StringTable(filename, directWrite);
