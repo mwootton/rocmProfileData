@@ -53,7 +53,6 @@ public:
     sqlite3_int64 markCategoryId{0};
     sqlite3_int64 apiNameId{0};
 
-    std::atomic<sqlite3_int64> idCounter{sqlite3_int64(1) << 31};
     std::atomic<sqlite3_int64> resumeTime{0};
 
     bool idsCached{false};
@@ -138,7 +137,7 @@ void roctxMarkA(const char *message)
     row.category_id = d->markCategoryId;
     row.apiName_id = d->apiNameId;
     row.args_id = logger.ustringTable().create(message);
-    row.api_id = d->idCounter.fetch_add(1, std::memory_order_relaxed);
+    row.api_id = Logger::singleton().nextAnnotationId();
 
     logger.apiTable().insert(row);
 }
@@ -188,7 +187,7 @@ int roctxRangePop()
         row.start = resumeTime;
 
     row.end = clocktime_ns();
-    row.api_id = d->idCounter.fetch_add(1, std::memory_order_relaxed);
+    row.api_id = Logger::singleton().nextAnnotationId();
 
     logger.apiTable().insert(row);
     return static_cast<int>(t_roctxStack.size());
@@ -239,7 +238,7 @@ void RoctxDataSource::end()
             ApiTable::row row = stack.front();
             stack.pop_front();
             row.end = now;
-            row.api_id = d->idCounter.fetch_add(1, std::memory_order_relaxed);
+            row.api_id = Logger::singleton().nextAnnotationId();
             logger.apiTable().insert(row);
         }
     }

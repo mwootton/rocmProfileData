@@ -48,16 +48,6 @@ void rpdflush()
     Logger::singleton().rpdflush();
 }
 
-void rpd_rangePush(const char *domain, const char *apiName, const char* args)
-{
-    Logger::singleton().rpd_rangePush(domain, apiName, args);
-}
-
-void rpd_rangePop()
-{
-    Logger::singleton().rpd_rangePop();
-}
-
 // Known config properties (property name / env var):
 //   filename       / RPDT_FILENAME       — output file path (default: ./trace.rpd)
 //   delayinit      / RPDT_DELAYINIT      — skip singleton creation at load time (0/1, default: 0)

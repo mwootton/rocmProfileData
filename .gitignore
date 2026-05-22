@@ -215,5 +215,6 @@ tags
 *.rpd
 *.json
 *.o
+*.d
 
 # End of https://www.gitignore.io/api/vim,python,django
