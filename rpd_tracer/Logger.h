@@ -72,6 +72,8 @@ public:
     const std::string filename() { return m_filename; };
     bool writeStackFrames() { return m_writeStackFrames; };
 
+    sqlite3 *getConnection();
+
 private:
     int m_activeCount {0};
     std::mutex m_activeMutex;
