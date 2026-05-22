@@ -83,6 +83,11 @@ sqlite3 *rpd_getConnection()
     return Logger::singleton().getConnection();
 }
 
+void rpd_resetStorage()
+{
+    Logger::singleton().resetStorage();
+}
+
 }  // extern "C"
 
 

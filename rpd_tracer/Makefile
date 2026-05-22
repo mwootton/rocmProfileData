@@ -11,7 +11,7 @@ ROCM_VERSION ?= $(shell cat $(HIP_PATH)/.info/version)
 
 RPD_LIBS = -lsqlite3 -lfmt -ldl
 RPD_INCLUDES =
-RPD_SRCS = Table.cpp BufferedTable.cpp OpTable.cpp KernelApiTable.cpp CopyApiTable.cpp ApiTable.cpp StringTable.cpp UStringTable.cpp MetadataTable.cpp MonitorTable.cpp StackFrameTable.cpp ApiIdList.cpp DbResource.cpp Schema.cpp Logger.cpp Unwind.cpp RoctxDataSource.cpp NvtxDataSource.cpp RlogClient.cpp
+RPD_SRCS = Table.cpp BufferedTable.cpp OpTable.cpp KernelApiTable.cpp CopyApiTable.cpp ApiTable.cpp StringTable.cpp UStringTable.cpp MetadataTable.cpp MonitorTable.cpp StackFrameTable.cpp ApiIdList.cpp DbResource.cpp Schema.cpp Storage.cpp Logger.cpp Unwind.cpp RoctxDataSource.cpp NvtxDataSource.cpp RlogClient.cpp
 
 ifneq (,$(HIP_PATH))
         $(info rocm_version is ${ROCM_VERSION})

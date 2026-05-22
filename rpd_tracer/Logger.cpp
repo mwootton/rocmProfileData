@@ -71,8 +71,20 @@ void Logger::rpdFinalize() {
 sqlite3 *Logger::getConnection()
 {
     sqlite3 *db = nullptr;
-    rpdSqliteOpen(m_filename.c_str(), &db);
+    rpdSqliteOpen(m_storage->filename().c_str(), &db);
     return db;
+}
+
+void Logger::resetStorage()
+{
+    m_storage->finalize();
+    delete m_storage;
+    const char *filename = getConfig("RPDT_FILENAME", "filename", "./trace.rpd");
+    bool directWrite = (atoi(getConfig("RPDT_DIRECTWRITE", "directwrite", "0")) != 0);
+    m_storage = new Storage(filename, directWrite);
+
+    for (auto it = m_sources.begin(); it != m_sources.end(); ++it)
+        (*it)->reset();
 }
 
 
@@ -107,14 +119,7 @@ void Logger::rpdflush()
     for (auto it = m_sources.begin(); it != m_sources.end(); ++it)
             (*it)->flush();
 
-    m_stringTable->flush();
-    m_ustringTable->flush();
-    m_kernelApiTable->flush();
-    m_copyApiTable->flush();
-    m_opTable->flush();
-    m_apiTable->flush();
-    m_monitorTable->flush();
-    m_stackFrameTable->flush();
+    m_storage->flush();
 
     const timestamp_t cb_end_time = clocktime_ns();
     createOverheadRecord(cb_begin_time, cb_end_time, "rpdflush", "");
@@ -132,12 +137,12 @@ void Logger::rpd_rangePush(const char *domain, const char *apiName, const char* 
     row.tid = GetTid();
     row.start = clocktime_ns();
     row.end = row.start;
-    row.domain_id = m_stringTable->getOrCreate(domain);
+    row.domain_id = m_storage->stringTable().getOrCreate(domain);
     row.category_id = EMPTY_STRING_ID;
-    row.apiName_id = m_stringTable->getOrCreate(apiName);
-    row.args_id = m_ustringTable->create(args);
+    row.apiName_id = m_storage->stringTable().getOrCreate(apiName);
+    row.args_id = m_storage->ustringTable().create(args);
     row.api_id = 0;
-    m_apiTable->pushRoctx(row);
+    m_storage->apiTable().pushRoctx(row);
 }
 
 void Logger::rpd_rangePop()
@@ -155,7 +160,7 @@ void Logger::rpd_rangePop()
     row.apiName_id = EMPTY_STRING_ID;
     row.args_id = EMPTY_STRING_ID;
     row.api_id = 0;
-    m_apiTable->popRoctx(row);
+    m_storage->apiTable().popRoctx(row);
 }
 
 
@@ -168,39 +173,8 @@ void Logger::init()
     rlogClientInit();
 
     const char *filename = getConfig("RPDT_FILENAME", "filename", "./trace.rpd");
-    m_filename = filename;
-
-    // Ensure schema exists
-
-    ensureSchema(filename);
-
-    // Create table recorders
-
     bool directWrite = (atoi(getConfig("RPDT_DIRECTWRITE", "directwrite", "0")) != 0);
-
-    m_metadataTable = new MetadataTable(filename);
-    m_stringTable = new StringTable(filename, directWrite);
-    m_ustringTable = new UStringTable(filename, directWrite);
-    m_kernelApiTable = new KernelApiTable(filename, directWrite);
-    m_copyApiTable = new CopyApiTable(filename, directWrite);
-    m_opTable = new OpTable(filename, directWrite);
-    m_apiTable = new ApiTable(filename, directWrite);
-    m_monitorTable = new MonitorTable(filename, directWrite);
-    m_stackFrameTable = new StackFrameTable(filename, directWrite);
-
-    // Log our session and pid
-    m_metadataTable->insert("session", fmt::format("id={} pid={}", m_metadataTable->sessionId(), GetPid()));
-
-    // Offset primary keys so they do not collide between sessions
-    sqlite3_int64 offset = m_metadataTable->sessionId() * (sqlite3_int64(1) << 32);
-    m_metadataTable->setIdOffset(offset);
-    m_stringTable->setIdOffset(offset);
-    m_ustringTable->setIdOffset(offset);
-    m_kernelApiTable->setIdOffset(offset);
-    m_copyApiTable->setIdOffset(offset);
-    m_opTable->setIdOffset(offset);
-    m_apiTable->setIdOffset(offset);
-    m_stackFrameTable->setIdOffset(offset);
+    m_storage = new Storage(filename, directWrite);
 
     // Create one instance of each available datasource
     std::list<std::string> factories;
@@ -280,7 +254,7 @@ void Logger::init()
             if (isRocmFactory)
                 rocmSourceAdded = true;
             std::string sourceName = it->substr(0, it->size() - 7);  // strip "Factory"
-            m_metadataTable->insert("process_datasource", fmt::format("pid={} source={}", GetPid(), sourceName));
+            m_storage->metadataTable().insert("process_datasource", fmt::format("pid={} source={}", GetPid(), sourceName));
         }
     }
 
@@ -338,20 +312,8 @@ void Logger::finalize()
         for (auto it = m_sources.begin(); it != m_sources.end(); ++it)
             (*it)->end();
 
-        // Flush recorders
-        const timestamp_t begin_time = clocktime_ns();
-        m_opTable->finalize();		// OpTable before subclassOpTables
-        m_kernelApiTable->finalize();
-        m_copyApiTable->finalize();
-        m_monitorTable->finalize();
-        m_stackFrameTable->finalize();
-        m_writeOverheadRecords = false;	// Don't make any new overhead records (api calls)
-        m_apiTable->finalize();
-        m_ustringTable->finalize();
-        m_stringTable->finalize();	// String table last
-
-        const timestamp_t end_time = clocktime_ns();
-        fprintf(stderr, "rpd_tracer: finalized in %f ms\n", 1.0 * (end_time - begin_time) / 1000000);
+        m_writeOverheadRecords = false;
+        m_storage->finalize();
     }
 }
 
@@ -367,21 +329,19 @@ void Logger::createOverheadRecord(uint64_t start, uint64_t end, const std::strin
 {
     if (m_writeOverheadRecords == false)
         return;
-    static sqlite3_int64 domain_id = m_stringTable->getOrCreate("rpd_tracer");
-    static sqlite3_int64 category_id = m_stringTable->getOrCreate("overhead");
     ApiTable::row row;
     row.pid = GetPid();
     row.tid = GetTid();
     row.start = start;
     row.end = end;
-    row.domain_id = domain_id;
-    row.category_id = category_id;
-    row.apiName_id = m_stringTable->getOrCreate(name);
-    row.args_id = m_ustringTable->create(args);
+    row.domain_id = m_storage->overheadDomainId();
+    row.category_id = m_storage->overheadCategoryId();
+    row.apiName_id = m_storage->stringTable().getOrCreate(name);
+    row.args_id = m_storage->ustringTable().create(args);
     row.api_id = 0;
 
     //fprintf(stderr, "overhead: %s (%s) - %f usec\n", name.c_str(), args.c_str(), (end-start) / 1000.0);
 
-    m_apiTable->insertRoctx(row);
+    m_storage->apiTable().insertRoctx(row);
 }
 

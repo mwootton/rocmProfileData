@@ -36,6 +36,7 @@ public:
     void startTracing() override;
     void stopTracing() override;
     void flush() override;
+    void reset() override;
 
     static RoctxDataSource &instance();
     RoctxDataSourcePrivate *priv() { return d; }

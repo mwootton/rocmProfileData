@@ -34,6 +34,7 @@ public:
     virtual void startTracing() = 0;
     virtual void stopTracing() = 0;
     virtual void flush() = 0;
+    virtual void reset() {};
 };
 
 }    // namespace rpdtracer

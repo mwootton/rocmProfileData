@@ -29,6 +29,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <sqlite3.h>
 #include "DataSource.h"
 #include "ApiIdList.h"
 
@@ -52,9 +53,14 @@ public:
     void startTracing() override;
     void stopTracing() override;
     void flush() override;
+    void reset() override;
 
 private:
     CudaApiIdList m_apiList;
+
+    bool m_idsCached {false};
+    sqlite3_int64 m_domainId {0};
+    void cacheIds();
 
     CUpti_SubscriberHandle m_subscriber;
 

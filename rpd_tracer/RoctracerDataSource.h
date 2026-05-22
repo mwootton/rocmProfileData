@@ -26,6 +26,7 @@
 #include <string>
 #include <cstddef>
 #include <cstdint>
+#include <sqlite3.h>
 
 #include "DataSource.h"
 #include "ApiIdList.h"
@@ -50,9 +51,13 @@ public:
     void startTracing() override;
     void stopTracing() override;
     void flush() override;
+    void reset() override;
 
 private:
     RocmApiIdList m_apiList;
+    bool m_idsCached {false};
+    sqlite3_int64 m_domainId {0};
+    void cacheIds();
 
     roctracer_pool_t *m_hccPool{nullptr};
     static void api_callback(uint32_t domain, uint32_t cid, const void* callback_data, void* arg);
