@@ -68,6 +68,7 @@ public:
 
     const std::string filename() { return m_storage->filename(); };
     sqlite3_int64 nextAnnotationId() { return m_storage->nextAnnotationId(); }
+    uint64_t storageGeneration() { return m_storage->generation(); }
     bool writeStackFrames() { return m_writeStackFrames; };
 
     sqlite3 *getConnection();
