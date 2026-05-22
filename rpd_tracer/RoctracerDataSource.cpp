@@ -30,6 +30,7 @@
 #include <fmt/format.h>
 
 #include "Logger.h"
+#include "LocalStringCache.h"
 #include "UStringCache.h"
 #include "Utility.h"
 
@@ -107,6 +108,7 @@ void RoctracerDataSource::api_callback(
     const void* callback_data,
     void* arg)
 {
+    static thread_local rpdtracer::LocalStringCache t_stringCache;
     static thread_local rpdtracer::UStringCache t_ustringCache;
     Logger &logger = Logger::singleton();
 
@@ -124,7 +126,7 @@ void RoctracerDataSource::api_callback(
             s_instance->cacheIds();
 
             const char *name = roctracer_op_string(ACTIVITY_DOMAIN_HIP_API, cid, 0);
-            sqlite3_int64 name_id = logger.stringTable().getOrCreate(name);
+            sqlite3_int64 name_id = t_stringCache.lookup(name, logger.stringTable(), logger.storageGeneration());
             row.pid = GetPid();
             row.tid = GetTid();
             row.start = timestamp;  // From TLS from preceding enter call
@@ -155,7 +157,7 @@ void RoctracerDataSource::api_callback(
                         //std::snprintf(buff, 4096, "stream=%p | kernel=%s",
                         //    params.stream,
                         //    kernelName.c_str());
-                        //row.args_id = logger.stringTable().getOrCreate(std::string(buff));
+                        //row.args_id = t_stringCache.lookup(std::string(buff), logger.stringTable(), logger.storageGeneration());
 
                         KernelApiTable::row krow;
                         krow.api_id = row.api_id;
@@ -168,7 +170,7 @@ void RoctracerDataSource::api_callback(
                         krow.workgroupZ = params.blockDim.z;
                         krow.groupSegmentSize = params.sharedMem;
                         krow.privateSegmentSize = 0;
-                        krow.kernelName_id = logger.stringTable().getOrCreate(kernelName);
+                        krow.kernelName_id = t_stringCache.lookup(kernelName, logger.stringTable(), logger.storageGeneration());
 
                         logger.kernelApiTable().insert(krow);
 
@@ -184,7 +186,7 @@ void RoctracerDataSource::api_callback(
                         //std::snprintf(buff, 4096, "stream=%p | kernel=%s",
                         //    params.stream,
                         //    kernelName.c_str());
-                        //row.args_id = logger.stringTable().getOrCreate(std::string(buff));
+                        //row.args_id = t_stringCache.lookup(std::string(buff), logger.stringTable(), logger.storageGeneration());
 
                         KernelApiTable::row krow;
                         krow.api_id = row.api_id;
@@ -197,7 +199,7 @@ void RoctracerDataSource::api_callback(
                         krow.workgroupZ = params.blockDim.z;
                         krow.groupSegmentSize = params.sharedMem;
                         krow.privateSegmentSize = 0;
-                        krow.kernelName_id = logger.stringTable().getOrCreate(kernelName);
+                        krow.kernelName_id = t_stringCache.lookup(kernelName, logger.stringTable(), logger.storageGeneration());
 
                         logger.kernelApiTable().insert(krow);
 
@@ -213,7 +215,7 @@ void RoctracerDataSource::api_callback(
                         //std::snprintf(buff, 4096, "stream=%p | kernel=%s",
                         //    params.stream,
                         //    kernelName.c_str());
-                        //row.args_id = logger.stringTable().getOrCreate(std::string(buff));
+                        //row.args_id = t_stringCache.lookup(std::string(buff), logger.stringTable(), logger.storageGeneration());
 
                         KernelApiTable::row krow;
                         krow.api_id = row.api_id;
@@ -226,7 +228,7 @@ void RoctracerDataSource::api_callback(
                         krow.workgroupZ = params.dimBlocks.z;
                         krow.groupSegmentSize = params.sharedMemBytes;
                         krow.privateSegmentSize = 0;
-                        krow.kernelName_id = logger.stringTable().getOrCreate(kernelName);
+                        krow.kernelName_id = t_stringCache.lookup(kernelName, logger.stringTable(), logger.storageGeneration());
 
                         logger.kernelApiTable().insert(krow);
 
@@ -242,7 +244,7 @@ void RoctracerDataSource::api_callback(
                         //std::snprintf(buff, 4096, "stream=%p | kernel=%s",
                         //    params.stream,
                         //    kernelName.c_str());
-                        //row.args_id = logger.stringTable().getOrCreate(std::string(buff));
+                        //row.args_id = t_stringCache.lookup(std::string(buff), logger.stringTable(), logger.storageGeneration());
 
                         KernelApiTable::row krow;
                         krow.api_id = row.api_id;
@@ -255,7 +257,7 @@ void RoctracerDataSource::api_callback(
                         krow.workgroupZ = params.dimBlocks.z;
                         krow.groupSegmentSize = params.sharedMemBytes;
                         krow.privateSegmentSize = 0;
-                        krow.kernelName_id = logger.stringTable().getOrCreate(kernelName);
+                        krow.kernelName_id = t_stringCache.lookup(kernelName, logger.stringTable(), logger.storageGeneration());
 
                         logger.kernelApiTable().insert(krow);
 
@@ -271,7 +273,7 @@ void RoctracerDataSource::api_callback(
                         //std::snprintf(buff, 4096, "stream=%p | kernel=%s",
                         //    params.stream,
                         //    kernelName.c_str());
-                        //row.args_id = logger.stringTable().getOrCreate(std::string(buff));
+                        //row.args_id = t_stringCache.lookup(std::string(buff), logger.stringTable(), logger.storageGeneration());
 
                         KernelApiTable::row krow;
                         krow.api_id = row.api_id;
@@ -284,7 +286,7 @@ void RoctracerDataSource::api_callback(
                         krow.workgroupZ = params.blockDimX.z;
                         krow.groupSegmentSize = params.sharedMemBytes;
                         krow.privateSegmentSize = 0;
-                        krow.kernelName_id = logger.stringTable().getOrCreate(kernelName);
+                        krow.kernelName_id = t_stringCache.lookup(kernelName, logger.stringTable(), logger.storageGeneration());
 
                         logger.kernelApiTable().insert(krow);
 
@@ -300,7 +302,7 @@ void RoctracerDataSource::api_callback(
                         //std::snprintf(buff, 4096, "stream=%p | kernel=%s",
                         //    params.stream,
                         //    kernelName.c_str());
-                        //row.args_id = logger.stringTable().getOrCreate(std::string(buff));
+                        //row.args_id = t_stringCache.lookup(std::string(buff), logger.stringTable(), logger.storageGeneration());
 
                         KernelApiTable::row krow;
                         krow.api_id = row.api_id;
@@ -313,7 +315,7 @@ void RoctracerDataSource::api_callback(
                         krow.workgroupZ = params.blockDimZ;
                         krow.groupSegmentSize = params.sharedMemBytes;
                         krow.privateSegmentSize = 0;
-                        krow.kernelName_id = logger.stringTable().getOrCreate(kernelName);
+                        krow.kernelName_id = t_stringCache.lookup(kernelName, logger.stringTable(), logger.storageGeneration());
 
                         logger.kernelApiTable().insert(krow);
 
@@ -329,7 +331,7 @@ void RoctracerDataSource::api_callback(
                         //std::snprintf(buff, 4096, "stream=%p | kernel=%s",
                         //    params.stream,
                         //    kernelName.c_str());
-                        //row.args_id = logger.stringTable().getOrCreate(std::string(buff));
+                        //row.args_id = t_stringCache.lookup(std::string(buff), logger.stringTable(), logger.storageGeneration());
 
                         KernelApiTable::row krow;
                         krow.api_id = row.api_id;
@@ -342,7 +344,7 @@ void RoctracerDataSource::api_callback(
                         krow.workgroupZ = params.blockDimZ;
                         krow.groupSegmentSize = params.sharedMemBytes;
                         krow.privateSegmentSize = 0;
-                        krow.kernelName_id = logger.stringTable().getOrCreate(kernelName);
+                        krow.kernelName_id = t_stringCache.lookup(kernelName, logger.stringTable(), logger.storageGeneration());
 
                         logger.kernelApiTable().insert(krow);
 
@@ -366,7 +368,7 @@ void RoctracerDataSource::api_callback(
                         krow.workgroupZ = 0;
                         krow.groupSegmentSize = 0;
                         krow.privateSegmentSize = 0;
-                        krow.kernelName_id = logger.stringTable().getOrCreate(kernelName);
+                        krow.kernelName_id = t_stringCache.lookup(kernelName, logger.stringTable(), logger.storageGeneration());
 
                         logger.kernelApiTable().insert(krow);
 
@@ -383,7 +385,7 @@ void RoctracerDataSource::api_callback(
                         //std::snprintf(buff, 4096, "stream=%p | kernel=%s",
                         //    params.stream,
                         //    kernelName.c_str());
-                        //row.args_id = logger.stringTable().getOrCreate(std::string(buff));
+                        //row.args_id = t_stringCache.lookup(std::string(buff), logger.stringTable(), logger.storageGeneration());
 
                         KernelApiTable::row krow;
                         krow.api_id = row.api_id;
@@ -396,7 +398,7 @@ void RoctracerDataSource::api_callback(
                         krow.workgroupZ = params.localWorkSizeZ;
                         krow.groupSegmentSize = params.sharedMemBytes;
                         krow.privateSegmentSize = 0;
-                        krow.kernelName_id = logger.stringTable().getOrCreate(kernelName);
+                        krow.kernelName_id = t_stringCache.lookup(kernelName, logger.stringTable(), logger.storageGeneration());
 
                         logger.kernelApiTable().insert(krow);
 
@@ -411,7 +413,7 @@ void RoctracerDataSource::api_callback(
                     //    data->args.hipMemcpy.src,
                     //    (uint32_t)(data->args.hipMemcpy.sizeBytes),
                     //    (uint32_t)(data->args.hipMemcpy.kind));
-                    //row.args_id = logger.stringTable().getOrCreate(std::string(buff));
+                    //row.args_id = t_stringCache.lookup(std::string(buff), logger.stringTable(), logger.storageGeneration());
                     {
                         CopyApiTable::row crow;
                         crow.api_id = row.api_id;
@@ -430,7 +432,7 @@ void RoctracerDataSource::api_callback(
                     //    (uint32_t)(data->args.hipMemcpy2D.width),
                     //    (uint32_t)(data->args.hipMemcpy2D.height),
                     //    (uint32_t)(data->args.hipMemcpy2D.kind));
-                    //row.args_id = logger.stringTable().getOrCreate(std::string(buff));
+                    //row.args_id = t_stringCache.lookup(std::string(buff), logger.stringTable(), logger.storageGeneration());
                     {
                         CopyApiTable::row crow;
                         crow.api_id = row.api_id;
@@ -450,7 +452,7 @@ void RoctracerDataSource::api_callback(
                     //    (uint32_t)(data->args.hipMemcpy2DAsync.width),
                     //    (uint32_t)(data->args.hipMemcpy2DAsync.height),
                     //    (uint32_t)(data->args.hipMemcpy2DAsync.kind));
-                    //row.args_id = logger.stringTable().getOrCreate(std::string(buff));
+                    //row.args_id = t_stringCache.lookup(std::string(buff), logger.stringTable(), logger.storageGeneration());
                     {
                         CopyApiTable::row crow;
                         crow.api_id = row.api_id;
@@ -470,7 +472,7 @@ void RoctracerDataSource::api_callback(
                     //    data->args.hipMemcpyAsync.src,
                     //    (uint32_t)(data->args.hipMemcpyAsync.sizeBytes),
                     //    (uint32_t)(data->args.hipMemcpyAsync.kind));
-                    //row.args_id = logger.stringTable().getOrCreate(std::string(buff));
+                    //row.args_id = t_stringCache.lookup(std::string(buff), logger.stringTable(), logger.storageGeneration());
                     {
                         CopyApiTable::row crow;
                         crow.api_id = row.api_id;
@@ -488,7 +490,7 @@ void RoctracerDataSource::api_callback(
                     //    data->args.hipMemcpyDtoD.dst,
                     //    data->args.hipMemcpyDtoD.src,
                     //    (uint32_t)(data->args.hipMemcpyDtoD.sizeBytes));
-                    //row.args_id = logger.stringTable().getOrCreate(std::string(buff));
+                    //row.args_id = t_stringCache.lookup(std::string(buff), logger.stringTable(), logger.storageGeneration());
                     {
                         CopyApiTable::row crow;
                         crow.api_id = row.api_id;
@@ -505,7 +507,7 @@ void RoctracerDataSource::api_callback(
                     //    data->args.hipMemcpyDtoDAsync.dst,
                     //    data->args.hipMemcpyDtoDAsync.src,
                     //    (uint32_t)(data->args.hipMemcpyDtoDAsync.sizeBytes));
-                    //row.args_id = logger.stringTable().getOrCreate(std::string(buff));
+                    //row.args_id = t_stringCache.lookup(std::string(buff), logger.stringTable(), logger.storageGeneration());
                     {
                         CopyApiTable::row crow;
                         crow.api_id = row.api_id;
@@ -523,7 +525,7 @@ void RoctracerDataSource::api_callback(
                     //    data->args.hipMemcpyDtoH.dst,
                     //    data->args.hipMemcpyDtoH.src,
                     //    (uint32_t)(data->args.hipMemcpyDtoH.sizeBytes));
-                    //row.args_id = logger.stringTable().getOrCreate(std::string(buff));
+                    //row.args_id = t_stringCache.lookup(std::string(buff), logger.stringTable(), logger.storageGeneration());
                     {
                         CopyApiTable::row crow;
                         crow.api_id = row.api_id;
@@ -539,7 +541,7 @@ void RoctracerDataSource::api_callback(
                     //    data->args.hipMemcpyDtoHAsync.dst,
                     //    data->args.hipMemcpyDtoHAsync.src,
                     //    (uint32_t)(data->args.hipMemcpyDtoHAsync.sizeBytes));
-                    //row.args_id = logger.stringTable().getOrCreate(std::string(buff));
+                    //row.args_id = t_stringCache.lookup(std::string(buff), logger.stringTable(), logger.storageGeneration());
                     {
                         CopyApiTable::row crow;
                         crow.api_id = row.api_id;
@@ -557,7 +559,7 @@ void RoctracerDataSource::api_callback(
                     //    data->args.hipMemcpyFromSymbol.symbol,
                     //    (uint32_t)(data->args.hipMemcpyFromSymbol.sizeBytes),
                     //    (uint32_t)(data->args.hipMemcpyFromSymbol.kind));
-                    //row.args_id = logger.stringTable().getOrCreate(std::string(buff));
+                    //row.args_id = t_stringCache.lookup(std::string(buff), logger.stringTable(), logger.storageGeneration());
                     {
                         CopyApiTable::row crow;
                         crow.api_id = row.api_id;
@@ -575,7 +577,7 @@ void RoctracerDataSource::api_callback(
                     //    data->args.hipMemcpyFromSymbolAsync.symbol,
                     //    (uint32_t)(data->args.hipMemcpyFromSymbolAsync.sizeBytes),
                     //    (uint32_t)(data->args.hipMemcpyFromSymbolAsync.kind));
-                    //row.args_id = logger.stringTable().getOrCreate(std::string(buff));
+                    //row.args_id = t_stringCache.lookup(std::string(buff), logger.stringTable(), logger.storageGeneration());
                     {
                         CopyApiTable::row crow;
                         crow.api_id = row.api_id;
@@ -593,7 +595,7 @@ void RoctracerDataSource::api_callback(
                     //    data->args.hipMemcpyHtoDAsync.dst,
                     //    data->args.hipMemcpyHtoDAsync.src,
                     //    (uint32_t)(data->args.hipMemcpyHtoDAsync.sizeBytes));
-                    //row.args_id = logger.stringTable().getOrCreate(std::string(buff));
+                    //row.args_id = t_stringCache.lookup(std::string(buff), logger.stringTable(), logger.storageGeneration());
                     {
                         CopyApiTable::row crow;
                         crow.api_id = row.api_id;
@@ -609,7 +611,7 @@ void RoctracerDataSource::api_callback(
                     //    data->args.hipMemcpyHtoDAsync.dst,
                     //    data->args.hipMemcpyHtoDAsync.src,
                     //    (uint32_t)(data->args.hipMemcpyHtoDAsync.sizeBytes));
-                    //row.args_id = logger.stringTable().getOrCreate(std::string(buff));
+                    //row.args_id = t_stringCache.lookup(std::string(buff), logger.stringTable(), logger.storageGeneration());
                     {
                         CopyApiTable::row crow;
                         crow.api_id = row.api_id;
@@ -628,7 +630,7 @@ void RoctracerDataSource::api_callback(
                     //    data->args.hipMemcpyPeer.src,
                     //    data->args.hipMemcpyPeer.srcDeviceId,
                     //    (uint32_t)(data->args.hipMemcpyPeer.sizeBytes));
-                    //row.args_id = logger.stringTable().getOrCreate(std::string(buff));
+                    //row.args_id = t_stringCache.lookup(std::string(buff), logger.stringTable(), logger.storageGeneration());
                     {
                         CopyApiTable::row crow;
                         crow.api_id = row.api_id;
@@ -648,7 +650,7 @@ void RoctracerDataSource::api_callback(
                     //    data->args.hipMemcpyPeerAsync.src,
                     //    data->args.hipMemcpyPeerAsync.srcDevice,
                     //    (uint32_t)(data->args.hipMemcpyPeerAsync.sizeBytes));
-                    //row.args_id = logger.stringTable().getOrCreate(std::string(buff));
+                    //row.args_id = t_stringCache.lookup(std::string(buff), logger.stringTable(), logger.storageGeneration());
                     {
                         CopyApiTable::row crow;
                         crow.api_id = row.api_id;
@@ -668,7 +670,7 @@ void RoctracerDataSource::api_callback(
                     //    data->args.hipMemcpyToSymbol.src,
                     //    (uint32_t)(data->args.hipMemcpyToSymbol.sizeBytes),
                     //    (uint32_t)(data->args.hipMemcpyToSymbol.kind));
-                    //row.args_id = logger.stringTable().getOrCreate(std::string(buff));
+                    //row.args_id = t_stringCache.lookup(std::string(buff), logger.stringTable(), logger.storageGeneration());
                     {
                         CopyApiTable::row crow;
                         crow.api_id = row.api_id;
@@ -686,7 +688,7 @@ void RoctracerDataSource::api_callback(
                     //    data->args.hipMemcpyToSymbolAsync.src,
                     //    (uint32_t)(data->args.hipMemcpyToSymbolAsync.sizeBytes),
                     //    (uint32_t)(data->args.hipMemcpyToSymbolAsync.kind));
-                    //row.args_id = logger.stringTable().getOrCreate(std::string(buff));
+                    //row.args_id = t_stringCache.lookup(std::string(buff), logger.stringTable(), logger.storageGeneration());
                     {
                         CopyApiTable::row crow;
                         crow.api_id = row.api_id;
@@ -705,7 +707,7 @@ void RoctracerDataSource::api_callback(
                     //    data->args.hipMemcpyWithStream.src,
                     //    (uint32_t)(data->args.hipMemcpyWithStream.sizeBytes),
                     //    (uint32_t)(data->args.hipMemcpyWithStream.kind));
-                    //row.args_id = logger.stringTable().getOrCreate(std::string(buff)); 
+                    //row.args_id = t_stringCache.lookup(std::string(buff), logger.stringTable(), logger.storageGeneration()); 
                     {
                         CopyApiTable::row crow;
                         crow.api_id = row.api_id;
@@ -814,6 +816,7 @@ return;
 
 void RoctracerDataSource::hcc_activity_callback(const char* begin, const char* end, void* arg)
 {
+    static thread_local rpdtracer::LocalStringCache t_stringCache;
     static thread_local rpdtracer::UStringCache t_ustringCache;
     const roctracer_record_t* record = (const roctracer_record_t*)(begin);
     const roctracer_record_t* end_record = (const roctracer_record_t*)(end);
@@ -836,7 +839,7 @@ void RoctracerDataSource::hcc_activity_callback(const char* begin, const char* e
     while (record < end_record) {
         const char *name = roctracer_op_string(record->domain, record->op, record->kind);
         if (record->op != HIP_OP_ID_BARRIER) { // Don't log markers
-            sqlite3_int64 name_id = logger.stringTable().getOrCreate(name);
+            sqlite3_int64 name_id = t_stringCache.lookup(name, logger.stringTable(), logger.storageGeneration());
 
             OpTable::row row;
             row.gpuId = mapDeviceId(record->device_id);
@@ -846,7 +849,7 @@ void RoctracerDataSource::hcc_activity_callback(const char* begin, const char* e
             row.end = record->end_ns + toffset;
             row.description_id = ((record->kind == HIP_OP_DISPATCH_KIND_KERNEL_)
                                || (record->kind == HIP_OP_DISPATCH_KIND_TASK_))
-                ? logger.stringTable().getOrCreate(cxx_demangle(record->kernel_name))
+                ? t_stringCache.lookup(cxx_demangle(record->kernel_name), logger.stringTable(), logger.storageGeneration())
                 : EMPTY_STRING_ID;
             row.opType_id = name_id;
             row.api_id = record->correlation_id;
