@@ -36,7 +36,7 @@ void RocmSmiDataSource::init()
     rsmi_num_monitor_devices(&num_devices);
     for (int i = 0; i < num_devices; ++i) {
         rsmi_dev_id_get(i, &dev_id);
-        fprintf(stderr, "device: %d\n", dev_id);
+        rpdLog("device: %d\n", dev_id);
     }
 #endif
 

@@ -131,7 +131,7 @@ void Logger::rpdflush()
 
 void Logger::init()
 {
-    fprintf(stderr, "rpd_tracer, because\n");
+    rpdLog("rpd_tracer, because\n");
 
     rlogClientInit();
 
