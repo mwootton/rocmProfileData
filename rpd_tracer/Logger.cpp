@@ -206,6 +206,10 @@ void Logger::init()
         "RoctracerDataSourceFactory"
         };
 
+    // FIXME: use rlog property
+    if (getenv("RPDT_CLOCKSYNC_IP") != nullptr)
+        factories.push_back("ChronoSyncDataSourceFactory");
+
     bool rocmSourceAdded = false;
     for (auto it = factories.begin(); it != factories.end(); ++it) {
         bool isRocmFactory = std::find(rocmFactories.begin(), rocmFactories.end(), *it) != rocmFactories.end();

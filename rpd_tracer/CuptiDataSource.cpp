@@ -689,8 +689,8 @@ void CUPTIAPI CuptiDataSource::bufferCompleted(CUcontext ctx, uint32_t streamId,
                             row.gpuId = record->deviceId;
                             row.queueId = record->contextId;        // FIXME: this or stream
                             row.sequenceId = record->streamId;
-                            row.start = record->start + toffset;
-                            row.end = record->end + toffset;
+                            row.start = adjust_external_ts(record->start + toffset);
+                            row.end = adjust_external_ts(record->end + toffset);
                             row.description_id = EMPTY_STRING_ID;
                             row.opType_id = t_stringCache.lookup("Memcpy", logger.stringTable(), logger.storageGeneration());
                             row.api_id = record->correlationId;
@@ -703,8 +703,8 @@ void CUPTIAPI CuptiDataSource::bufferCompleted(CUcontext ctx, uint32_t streamId,
                             row.gpuId = record->deviceId;
                             row.queueId = record->contextId;        // FIXME: this or stream
                             row.sequenceId = record->streamId;
-                            row.start = record->start + toffset;
-                            row.end = record->end + toffset;
+                            row.start = adjust_external_ts(record->start + toffset);
+                            row.end = adjust_external_ts(record->end + toffset);
                             row.description_id = EMPTY_STRING_ID;
                             row.opType_id = t_stringCache.lookup("Memset", logger.stringTable(), logger.storageGeneration());
                             row.api_id = record->correlationId;
@@ -719,8 +719,8 @@ void CUPTIAPI CuptiDataSource::bufferCompleted(CUcontext ctx, uint32_t streamId,
                             row.gpuId = record->deviceId;
                             row.queueId = record->contextId;	// FIXME: this or stream
                             row.sequenceId = record->streamId;
-                            row.start = record->start + toffset;
-                            row.end = record->end + toffset;
+                            row.start = adjust_external_ts(record->start + toffset);
+                            row.end = adjust_external_ts(record->end + toffset);
                             row.description_id = t_stringCache.lookup(cxx_demangle(record->name), logger.stringTable(), logger.storageGeneration());
                             row.opType_id = t_stringCache.lookup(name, logger.stringTable(), logger.storageGeneration());
                             row.api_id = record->correlationId;
