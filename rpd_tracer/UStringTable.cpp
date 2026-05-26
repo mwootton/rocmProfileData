@@ -20,10 +20,10 @@
 * THE SOFTWARE.
 ********************************************************************************/
 #include "Table.h"
-#include "BufferPool.h"
 
 #include <thread>
 #include <unordered_map>
+#include <array>
 #include <mutex>
 
 #include "rpd_tracer.h"
@@ -40,12 +40,10 @@ CREATE TEMPORARY TABLE "temp_rocpd_ustring" ("id" integer NOT NULL PRIMARY KEY A
 class UStringTablePrivate
 {
 public:
-    UStringTablePrivate(UStringTable *cls) : p(cls) {
-        rows = p->m_slot->rows<UStringTable::row>();
-    }
+    UStringTablePrivate(UStringTable *cls) : p(cls) {} 
     static const int BUFFERSIZE = 4096 * 8;
     static const int BATCHSIZE = 4096;           // rows per transaction
-    UStringTable::row *rows;
+    std::array<UStringTable::row, BUFFERSIZE> rows; // Circular buffer
 
     sqlite3_stmt *stringInsert;
     bool directWrite;
@@ -56,8 +54,8 @@ public:
 };
 
 
-UStringTable::UStringTable(const char *basefile, bool directWrite, BufferPool &pool)
-: BufferedTable(basefile, pool.allocate<UStringTable::row>(UStringTablePrivate::BUFFERSIZE, "UStringTable"), UStringTablePrivate::BATCHSIZE)
+UStringTable::UStringTable(const char *basefile, bool directWrite)
+: BufferedTable(basefile, UStringTablePrivate::BUFFERSIZE, UStringTablePrivate::BATCHSIZE)
 , d(new UStringTablePrivate(this))
 {
     int ret;
@@ -100,9 +98,10 @@ sqlite3_int64 UStringTable::create(const std::string &key)
 void UStringTablePrivate::insert(UStringTable::row &row)
 {
     std::unique_lock<std::mutex> lock(p->m_mutex);
-    while (p->m_slot->head() - p->m_slot->tail() >= UStringTablePrivate::BUFFERSIZE) {
+    while (p->m_head - p->m_tail >= UStringTablePrivate::BUFFERSIZE) {
+        // buffer is full; insert in-line or wait
         const timestamp_t start = clocktime_ns();
-        p->m_wait.notify_one();
+        p->m_wait.notify_one();  // make sure working is running
         p->m_wait.wait(lock);
         const timestamp_t end = clocktime_ns();
         lock.unlock();
@@ -110,10 +109,10 @@ void UStringTablePrivate::insert(UStringTable::row &row)
         lock.lock();
     }
 
-    row.string_id = ++(p->m_slot->head());
-    rows[p->m_slot->head() % UStringTablePrivate::BUFFERSIZE] = row;
+    row.string_id = ++(p->m_head);
+    rows[p->m_head % UStringTablePrivate::BUFFERSIZE] = row;
 
-    if (p->workerRunning() == false && (p->m_slot->head() - p->m_slot->tail()) >= UStringTablePrivate::BATCHSIZE) {
+    if (p->workerRunning() == false && (p->m_head - p->m_tail) >= UStringTablePrivate::BATCHSIZE) {
         //lock.unlock();	// FIXME: okay to comment out?
         p->m_wait.notify_one();
     }
@@ -139,15 +138,16 @@ void UStringTable::writeRows()
     std::unique_lock<std::mutex> wlock(m_writeMutex);
     std::unique_lock<std::mutex> lock(m_mutex);
 
-    if (m_slot->head() == m_slot->tail())
+    if (m_head == m_tail)
         return;
 
+    //const timestamp_t cb_begin_time = util::HsaTimer::clocktime_ns(util::HsaTimer::TIME_ID_CLOCK_MONOTONIC);
     //FIXME
     const timestamp_t cb_begin_time = clocktime_ns();
 
-    int start = m_slot->tail() + 1;
-    int end = m_slot->tail() + BATCHSIZE;
-    end = (end > m_slot->head()) ? m_slot->head() : end;
+    int start = m_tail + 1;
+    int end = m_tail + BATCHSIZE;
+    end = (end > m_head) ? m_head : end;
     lock.unlock();
 
     sqlite3_exec(m_connection, "BEGIN DEFERRED TRANSACTION", NULL, NULL, NULL);
@@ -155,7 +155,7 @@ void UStringTable::writeRows()
     for (int i = start; i <= end; ++i) {
         // insert rocpd_string
         int index = 1;
-        UStringTable::row &r = d->rows[i % m_slot->capacity()];
+        UStringTable::row &r = d->rows[i % BUFFERSIZE];
         //printf("%lld %s\n", r.string_id, r.string.c_str());
         sqlite3_bind_int64(d->stringInsert, index++, r.string_id + m_idOffset);
         sqlite3_bind_text(d->stringInsert, index++, r.string.c_str(), -1, SQLITE_STATIC);	// FIXME SQLITE_TRANSIENT?
@@ -163,7 +163,7 @@ void UStringTable::writeRows()
         sqlite3_reset(d->stringInsert);
     }
     lock.lock();
-    m_slot->tail() = end;
+    m_tail = end;
     lock.unlock();
 
     //const timestamp_t cb_mid_time = util::HsaTimer::clocktime_ns(util::HsaTimer::TIME_ID_CLOCK_MONOTONIC);
@@ -175,7 +175,7 @@ void UStringTable::writeRows()
     // FIXME
     if (done == false) {
         char buff[4096];
-        std::snprintf(buff, 4096, "count=%d | remaining=%d", end - start + 1, m_slot->head() - m_slot->tail());
+        std::snprintf(buff, 4096, "count=%d | remaining=%d", end - start + 1, m_head - m_tail);
         createOverheadRecord(cb_begin_time, cb_end_time, "UStringTable::writeRows", buff);
     }
 #endif
