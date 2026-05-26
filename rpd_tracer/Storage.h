@@ -7,6 +7,7 @@
 #include <string>
 #include <sqlite3.h>
 #include "Table.h"
+#include "BufferPool.h"
 
 namespace rpdtracer {
 
@@ -42,6 +43,7 @@ public:
     uint64_t generation() const { return m_generation.load(std::memory_order_relaxed); }
 
 private:
+    BufferPool m_bufferPool;
     std::string m_filename;
     MetadataTable *m_metadataTable {nullptr};
     StringTable *m_stringTable {nullptr};
