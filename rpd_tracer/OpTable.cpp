@@ -22,6 +22,7 @@
 #include "Table.h"
 #include "WriterBackend.h"
 #include "ByteBuffer.h"
+#include "NetWriterBackend.h"
 
 #include <map>
 #include <thread>
@@ -132,6 +133,16 @@ WriterBackend* OpTable::createWriterBackend(const char *basefile, bool directWri
     return new OpTableWriterBackend(basefile, directWrite);
 }
 
+static void serializeOpTableRow(const void *row, ByteBuffer &buf) {
+    static_cast<const OpTable::row*>(row)->serialize(buf);
+}
+
+WriterBackend* OpTable::createNetWriterBackend(const char *host, int port, bool directWrite)
+{
+    return new NetWriterBackend("OpTable", host, port, directWrite,
+        sizeof(OpTable::row), serializeOpTableRow);
+}
+
 
 class OpTablePrivate
 {
@@ -147,7 +158,8 @@ public:
 
 OpTable::OpTable(const char *basefile, bool directWrite)
 : BufferedTable(basefile, OpTablePrivate::BUFFERSIZE, OpTablePrivate::BATCHSIZE,
-    createWriterBackend(basefile, directWrite))
+    isRemoteNode() ? createNetWriterBackend(getLogaggHost(), getLogaggPort(), directWrite)
+                   : createWriterBackend(basefile, directWrite))
 , d(new OpTablePrivate(this))
 {
 }
