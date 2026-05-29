@@ -405,8 +405,13 @@ void RemoteDataSource::writerLoop(WriterChannel *channel)
             channel->queue.pop();
         }
 
+        const timestamp_t begin = clocktime_ns();
         channel->deserializeAndWrite(item.data, item.rowCount,
                                      item.idOffset, item.nodeId, channel->backend);
+        const timestamp_t end = clocktime_ns();
+        char buff[256];
+        std::snprintf(buff, sizeof(buff), "node=%d count=%d", item.nodeId, item.rowCount);
+        createOverheadRecord(begin, end, "RemoteDataSource::write", buff);
     }
 
     // Drain remaining items
