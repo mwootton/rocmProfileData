@@ -396,12 +396,14 @@ void AmdSmiDataSource::work()
 
     buildSlots();
 
+    // Logger::singleton() blocks until Logger construction is complete,
+    // which guarantees the database file exists before we open it.
+    Logger &logger = Logger::singleton();
+
     const char *dbfile = getenv("RPDT_FILENAME");
     if (dbfile == nullptr)
         dbfile = "./trace.rpd";
     m_resource = new DbResource(std::string(dbfile), std::string("amdsmi_logger_active"));
-
-    Logger &logger = Logger::singleton();
     bool haveResource = m_resource->tryLock();
 
     // One metrics buffer per GPU, read once per poll
