@@ -11,6 +11,7 @@
 
 #include <fmt/format.h>
 
+#include <algorithm>
 #include <chrono>
 #include <string>
 #include <cstring>
@@ -90,7 +91,6 @@ struct gpu_metrics_v1_base {
 
 struct GpuDevice {
     std::string metricsPath;    // e.g. /sys/class/drm/card0/device/gpu_metrics
-    int fd {-1};
 };
 
 
@@ -195,6 +195,10 @@ void AmdSmiDataSource::buildSlots()
                 slot.flag = def.flag;
                 slot.deviceType = "gpu";
                 slot.monitorType = def.monitorType;
+                if (def.flag == METRIC_POWER)
+                    slot.deadband = 10;
+                if (def.flag & (METRIC_TEMP_EDGE | METRIC_TEMP_HOTSPOT | METRIC_TEMP_MEM))
+                    slot.deadband = 2;
                 m_slots.push_back(std::move(slot));
             }
         }
@@ -203,6 +207,26 @@ void AmdSmiDataSource::buildSlots()
 
 
 // ---- Enumerate AMD GPUs via sysfs ----
+// Sort by card number to match HIP device enumeration order (readdir order
+// is arbitrary and does not match PCI bus order).
+//
+// KNOWN ISSUE: deviceId mapping vs profiling backends
+//   We enumerate all physical GPUs via sysfs regardless of visibility masks
+//   (ROCR_VISIBLE_DEVICES, HIP_VISIBLE_DEVICES).  Profiling backends
+//   (roctracer, rocprofiler-sdk, etc.) report gpuId based on the runtime's
+//   filtered and renumbered device list.  When GPUs are masked out, our
+//   deviceId N may not correspond to the backend's gpuId N.
+//
+//   Potential solutions:
+//   - Match on PCI BDF: sysfs provides it in device/uevent; backends can
+//     query it from HSA agent info or HIP device properties.  A BDF-keyed
+//     lookup would be backend-agnostic.
+//   - Store PCI BDF in the monitor table alongside deviceId so consumers
+//     can join on BDF rather than relying on index equality.
+//   - Filter our enumeration using the visibility env vars, but the format
+//     is complex (indices, UUIDs, ranges) and fragile.
+//   Workaround: use contiguous GPU indices starting from 0 (e.g. 0,1,2)
+//   when setting visibility masks.  Skipping or reordering breaks alignment.
 
 static std::vector<GpuDevice> enumerateGpus()
 {
@@ -212,24 +236,30 @@ static std::vector<GpuDevice> enumerateGpus()
     if (!dir)
         return gpus;
 
+    std::vector<std::pair<int, std::string>> candidates;
     struct dirent *ent;
     while ((ent = readdir(dir)) != nullptr) {
         if (strncmp(ent->d_name, "card", 4) != 0)
             continue;
-        // Skip render nodes and connector nodes (e.g. card0-VGA-1)
         const char *p = ent->d_name + 4;
         while (*p >= '0' && *p <= '9') ++p;
         if (*p != '\0')
             continue;
 
+        int cardNum = atoi(ent->d_name + 4);
         std::string metricsPath = std::string("/sys/class/drm/") + ent->d_name + "/device/gpu_metrics";
-        if (access(metricsPath.c_str(), R_OK) == 0) {
-            GpuDevice dev;
-            dev.metricsPath = std::move(metricsPath);
-            gpus.push_back(std::move(dev));
-        }
+        if (access(metricsPath.c_str(), R_OK) == 0)
+            candidates.push_back({cardNum, std::move(metricsPath)});
     }
     closedir(dir);
+
+    std::sort(candidates.begin(), candidates.end());
+
+    for (auto &[num, path] : candidates) {
+        GpuDevice dev;
+        dev.metricsPath = std::move(path);
+        gpus.push_back(std::move(dev));
+    }
     return gpus;
 }
 
@@ -265,13 +295,8 @@ void AmdSmiDataSource::end()
         m_resource = nullptr;
     }
 
-    // Close open file descriptors
-    for (auto dev : m_devices) {
-        auto *gpu = static_cast<GpuDevice*>(dev);
-        if (gpu->fd >= 0)
-            close(gpu->fd);
-        delete gpu;
-    }
+    for (auto dev : m_devices)
+        delete static_cast<GpuDevice*>(dev);
     m_devices.clear();
 }
 
@@ -329,57 +354,53 @@ static bool readGpuMetrics(GpuDevice &gpu, gpu_metrics_v1_base &out)
 }
 
 
-bool AmdSmiDataSource::collectSlot(const MetricSlot &slot,
+bool AmdSmiDataSource::collectSlot(MetricSlot &slot,
                                    void *devPtr,
                                    std::string &valueOut)
 {
-    // devPtr is actually a pointer into m_metricsCache
     auto *m = static_cast<gpu_metrics_v1_base*>(devPtr);
+    int raw;
 
     switch (slot.flag) {
     case METRIC_GPU_UTIL:
         if (m->average_gfx_activity == UINT16_MAX) return false;
-        valueOut = fmt::format("{}", m->average_gfx_activity);
-        return true;
+        raw = m->average_gfx_activity; break;
     case METRIC_MEM_UTIL:
         if (m->average_umc_activity == UINT16_MAX) return false;
-        valueOut = fmt::format("{}", m->average_umc_activity);
-        return true;
+        raw = m->average_umc_activity; break;
     case METRIC_MM_UTIL:
         if (m->average_mm_activity == UINT16_MAX) return false;
-        valueOut = fmt::format("{}", m->average_mm_activity);
-        return true;
-
+        raw = m->average_mm_activity; break;
     case METRIC_SCLK:
         if (m->current_gfxclk == UINT16_MAX) return false;
-        valueOut = fmt::format("{}", m->current_gfxclk);
-        return true;
+        raw = m->current_gfxclk; break;
     case METRIC_MCLK:
         if (m->current_uclk == UINT16_MAX) return false;
-        valueOut = fmt::format("{}", m->current_uclk);
-        return true;
-
+        raw = m->current_uclk; break;
     case METRIC_TEMP_EDGE:
         if (m->temperature_edge == UINT16_MAX) return false;
-        valueOut = fmt::format("{}", m->temperature_edge);
-        return true;
+        raw = m->temperature_edge; break;
     case METRIC_TEMP_HOTSPOT:
         if (m->temperature_hotspot == UINT16_MAX) return false;
-        valueOut = fmt::format("{}", m->temperature_hotspot);
-        return true;
+        raw = m->temperature_hotspot; break;
     case METRIC_TEMP_MEM:
         if (m->temperature_mem == UINT16_MAX) return false;
-        valueOut = fmt::format("{}", m->temperature_mem);
-        return true;
-
+        raw = m->temperature_mem; break;
     case METRIC_POWER:
         if (m->average_socket_power == UINT16_MAX) return false;
-        valueOut = fmt::format("{}", m->average_socket_power);
-        return true;
-
+        raw = m->average_socket_power; break;
     default:
         return false;
     }
+
+    if (slot.deadband > 0 && slot.lastEmitted != INT_MIN) {
+        if (abs(raw - slot.lastEmitted) < slot.deadband)
+            return false;
+    }
+    slot.lastEmitted = raw;
+
+    valueOut = fmt::format("{}", raw);
+    return true;
 }
 
 
@@ -396,8 +417,14 @@ void AmdSmiDataSource::work()
 
     buildSlots();
 
-    // Logger::singleton() blocks until Logger construction is complete,
-    // which guarantees the database file exists before we open it.
+    // Block until startTracing() fires.  Logger construction is complete
+    // by that point, so Logger::singleton() is safe to call.
+    {
+        std::unique_lock<std::mutex> lock(m_mutex);
+        m_cv.wait(lock, [&]{ return m_loggingActive || m_done.load(); });
+    }
+    if (m_done) return;
+
     Logger &logger = Logger::singleton();
 
     const char *dbfile = getenv("RPDT_FILENAME");
@@ -406,39 +433,31 @@ void AmdSmiDataSource::work()
     m_resource = new DbResource(std::string(dbfile), std::string("amdsmi_logger_active"));
     bool haveResource = m_resource->tryLock();
 
-    // One metrics buffer per GPU, read once per poll
     std::vector<gpu_metrics_v1_base> metricsCache(m_devices.size());
 
     while (!m_done) {
-        std::unique_lock<std::mutex> lock(m_mutex);
-
         if (haveResource && m_loggingActive) {
-            lock.unlock();
-
-            // Read gpu_metrics once per device per poll
             for (size_t i = 0; i < m_devices.size(); ++i)
                 readGpuMetrics(*static_cast<GpuDevice*>(m_devices[i]), metricsCache[i]);
 
             std::string value;
             for (auto &slot : m_slots) {
-                if (collectSlot(slot, &metricsCache[slot.deviceIdx], value)) {
+                auto &mc = metricsCache[slot.deviceIdx];
+                if (collectSlot(slot, &mc, value)) {
                     MonitorTable::row mrow;
                     mrow.deviceId = slot.deviceIdx;
                     mrow.deviceType = slot.deviceType;
                     mrow.monitorType = slot.monitorType;
-                    mrow.start = clocktime_ns();
+                    mrow.start = mc.system_clock_counter;
                     mrow.end = 0;
                     mrow.value = value;
                     logger.monitorTable().insert(mrow);
                 }
             }
-
-            lock.lock();
         }
 
-        if (m_done)
-            break;
-
+        std::unique_lock<std::mutex> lock(m_mutex);
+        if (m_done) break;
         auto waitTime = std::chrono::microseconds(
             haveResource ? m_periodUs : m_periodUs * 10);
         m_cv.wait_for(lock, waitTime);

@@ -51,9 +51,9 @@ public:
     public:
         bool operator() (const MonitorTable::row& lhs, const MonitorTable::row& rhs) const
         {
-            return lhs.deviceId < rhs.deviceId
-                || lhs.monitorType < rhs.monitorType
-                || lhs.deviceType < rhs.deviceType;
+            if (lhs.deviceId != rhs.deviceId) return lhs.deviceId < rhs.deviceId;
+            if (lhs.monitorType != rhs.monitorType) return lhs.monitorType < rhs.monitorType;
+            return lhs.deviceType < rhs.deviceType;
         }
     };
 
@@ -152,6 +152,7 @@ void MonitorTable::flushRows()
     int ret = 0;
     ret = sqlite3_exec(m_connection, "begin transaction", NULL, NULL, NULL);
     ret = sqlite3_exec(m_connection, "insert into rocpd_monitor(deviceType, deviceId, monitorType, start, end, value) select deviceType, deviceId, monitorType, start, end, value from temp_rocpd_monitor", NULL, NULL, NULL);
+    fprintf(stderr, "rocpd_monitor: %d\n", ret);
     ret = sqlite3_exec(m_connection, "delete from temp_rocpd_monitor", NULL, NULL, NULL);
     ret = sqlite3_exec(m_connection, "commit", NULL, NULL, NULL);
 }

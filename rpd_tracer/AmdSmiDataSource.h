@@ -11,6 +11,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
+#include <climits>
 #include <vector>
 #include <string>
 
@@ -44,15 +45,15 @@ public:
 private:
     std::mutex m_mutex;
     std::condition_variable m_cv;
-    bool m_loggingActive {false};
+    std::atomic<bool> m_loggingActive {false};
     DbResource *m_resource {nullptr};
 
     void work();
     std::thread *m_worker {nullptr};
     std::atomic<bool> m_done {false};
-    int m_periodUs {8333};    // ~120 Hz
+    int m_periodUs {2000};    // 500 Hz
 
-    // Cached device handles (void* == amdsmi_processor_handle)
+    // Cached device handles (GpuDevice pointers, defined in .cpp)
     std::vector<void*> m_devices;
 
     uint32_t m_enabledMetrics {METRIC_DEFAULT};
@@ -65,10 +66,12 @@ private:
         uint32_t flag;
         std::string deviceType;
         std::string monitorType;
+        int lastEmitted {INT_MIN};
+        int deadband {0};
     };
     std::vector<MetricSlot> m_slots;
 
-    static bool collectSlot(const MetricSlot &slot, void *dev, std::string &valueOut);
+    static bool collectSlot(MetricSlot &slot, void *dev, std::string &valueOut);
 };
 
 }    // namespace rpdtracer
