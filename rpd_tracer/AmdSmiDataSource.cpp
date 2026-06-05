@@ -11,13 +11,23 @@
 
 #include <algorithm>
 #include <chrono>
+#include <climits>
 #include <string>
 #include <cstring>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <atomic>
+#include <vector>
 
+#include <sqlite3.h>
+
+#include "DbResource.h"
 #include "Logger.h"
 #include "Utility.h"
 
 using rpdtracer::AmdSmiDataSource;
+using rpdtracer::AmdSmiDataSourcePrivate;
 
 
 // ---- gpu_metrics v1.x layout (from amdgpu kernel driver) ----
@@ -92,11 +102,48 @@ struct GpuDevice {
 };
 
 
-// ---- Factory ----
+// ---- Private implementation ----
 
-extern "C" {
-    rpdtracer::DataSource *AmdSmiDataSourceFactory() { return new AmdSmiDataSource(); }
-}  // extern "C"
+struct MetricSlot {
+    int deviceIdx;
+    uint32_t flag;
+    std::string deviceType;
+    std::string monitorType;
+    int lastEmitted {INT_MIN};
+    int deadband {0};
+};
+
+namespace rpdtracer {
+
+class AmdSmiDataSourcePrivate
+{
+public:
+    AmdSmiDataSourcePrivate(AmdSmiDataSource *cls) : p(cls) {}
+
+    AmdSmiDataSource *p;
+
+    std::mutex mutex;
+    std::condition_variable cv;
+    std::atomic<bool> loggingActive {false};
+    DbResource *resource {nullptr};
+
+    std::thread *worker {nullptr};
+    std::atomic<bool> done {false};
+    int periodUs {1000};    // 1000 Hz
+
+    std::vector<GpuDevice*> devices;
+    uint32_t enabledMetrics {AmdSmiDataSource::METRIC_DEFAULT};
+
+    std::vector<MetricSlot> slots;
+
+    void parseConfig();
+    void buildSlots();
+    void work();
+
+    static bool collectSlot(MetricSlot &slot, gpu_metrics_v1_base &metrics, sqlite3_int64 &valueOut);
+};
+
+}  // namespace rpdtracer
 
 
 // ---- Config ----
@@ -115,16 +162,16 @@ static const struct { const char *name; uint32_t flag; } s_metricNames[] = {
 };
 
 
-void AmdSmiDataSource::parseConfig()
+void AmdSmiDataSourcePrivate::parseConfig()
 {
     const char *val = getenv("RPDT_SMI_METRICS");
     if (val != nullptr) {
         if (strcmp(val, "all") == 0) {
-            m_enabledMetrics = 0xFFFFFFFF;
+            enabledMetrics = 0xFFFFFFFF;
             return;
         }
         if (strcmp(val, "none") == 0) {
-            m_enabledMetrics = 0;
+            enabledMetrics = 0;
             return;
         }
         uint32_t flags = 0;
@@ -151,53 +198,54 @@ void AmdSmiDataSource::parseConfig()
 
             pos = end + 1;
         }
-        m_enabledMetrics = flags;
+        enabledMetrics = flags;
     }
 
     const char *period = getenv("RPDT_SMI_PERIOD");
     if (period != nullptr) {
         int p = atoi(period);
         if (p > 0)
-            m_periodUs = p;
+            periodUs = p;
     }
 }
 
 
-void AmdSmiDataSource::buildSlots()
+void AmdSmiDataSourcePrivate::buildSlots()
 {
+    using MF = AmdSmiDataSource::MetricFlag;
     struct MetricDef {
         uint32_t flag;
         const char *monitorType;
     };
     static const MetricDef defs[] = {
-        {METRIC_GPU_UTIL,     "gpu_util"},
-        {METRIC_MEM_UTIL,     "mem_util"},
-        {METRIC_MM_UTIL,      "mm_util"},
-        {METRIC_SCLK,         "sclk"},
-        {METRIC_MCLK,         "mclk"},
-        {METRIC_TEMP_EDGE,    "temp_edge"},
-        {METRIC_TEMP_HOTSPOT, "temp_hotspot"},
-        {METRIC_TEMP_MEM,     "temp_mem"},
-        {METRIC_POWER,        "power"},
-        {METRIC_VRAM_USED,    "vram_used"},
+        {MF::METRIC_GPU_UTIL,     "gpu_util"},
+        {MF::METRIC_MEM_UTIL,     "mem_util"},
+        {MF::METRIC_MM_UTIL,      "mm_util"},
+        {MF::METRIC_SCLK,         "sclk"},
+        {MF::METRIC_MCLK,         "mclk"},
+        {MF::METRIC_TEMP_EDGE,    "temp_edge"},
+        {MF::METRIC_TEMP_HOTSPOT, "temp_hotspot"},
+        {MF::METRIC_TEMP_MEM,     "temp_mem"},
+        {MF::METRIC_POWER,        "power"},
+        {MF::METRIC_VRAM_USED,    "vram_used"},
     };
 
-    m_slots.clear();
-    for (int d = 0; d < (int)m_devices.size(); ++d) {
+    slots.clear();
+    for (int i = 0; i < (int)devices.size(); ++i) {
         for (auto &def : defs) {
-            if (m_enabledMetrics & def.flag) {
-                if (def.flag == METRIC_VRAM_USED)
+            if (enabledMetrics & def.flag) {
+                if (def.flag == MF::METRIC_VRAM_USED)
                     continue;  // not available via gpu_metrics
                 MetricSlot slot;
-                slot.deviceIdx = d;
+                slot.deviceIdx = i;
                 slot.flag = def.flag;
                 slot.deviceType = "gpu";
                 slot.monitorType = def.monitorType;
-                if (def.flag == METRIC_POWER)
+                if (def.flag == MF::METRIC_POWER)
                     slot.deadband = 10;
-                if (def.flag & (METRIC_TEMP_EDGE | METRIC_TEMP_HOTSPOT | METRIC_TEMP_MEM))
+                if (def.flag & (MF::METRIC_TEMP_EDGE | MF::METRIC_TEMP_HOTSPOT | MF::METRIC_TEMP_MEM))
                     slot.deadband = 2;
-                m_slots.push_back(std::move(slot));
+                slots.push_back(std::move(slot));
             }
         }
     }
@@ -226,9 +274,9 @@ void AmdSmiDataSource::buildSlots()
 //   Workaround: use contiguous GPU indices starting from 0 (e.g. 0,1,2)
 //   when setting visibility masks.  Skipping or reordering breaks alignment.
 
-static std::vector<GpuDevice> enumerateGpus()
+static std::vector<GpuDevice*> enumerateGpus()
 {
-    std::vector<GpuDevice> gpus;
+    std::vector<GpuDevice*> gpus;
 
     DIR *dir = opendir("/sys/class/drm");
     if (!dir)
@@ -254,63 +302,72 @@ static std::vector<GpuDevice> enumerateGpus()
     std::sort(candidates.begin(), candidates.end());
 
     for (auto &[num, path] : candidates) {
-        GpuDevice dev;
-        dev.metricsPath = std::move(path);
-        gpus.push_back(std::move(dev));
+        auto *dev = new GpuDevice();
+        dev->metricsPath = std::move(path);
+        gpus.push_back(dev);
     }
     return gpus;
 }
+
+
+// ---- Factory ----
+
+extern "C" {
+    rpdtracer::DataSource *AmdSmiDataSourceFactory() { return new AmdSmiDataSource(); }
+}  // extern "C"
 
 
 // ---- DataSource interface ----
 
 void AmdSmiDataSource::init()
 {
-    parseConfig();
+    d = new AmdSmiDataSourcePrivate(this);
+    d->parseConfig();
 
-    if (m_enabledMetrics == 0)
+    if (d->enabledMetrics == 0)
         return;
 
-    m_done = false;
-    m_worker = new std::thread(&AmdSmiDataSource::work, this);
+    d->done = false;
+    d->worker = new std::thread(&AmdSmiDataSourcePrivate::work, d);
 }
 
 
 void AmdSmiDataSource::end()
 {
-    if (m_worker == nullptr)
+    if (d->worker == nullptr) {
+        delete d;
         return;
-
-    m_done = true;
-    m_cv.notify_one();
-    m_worker->join();
-    delete m_worker;
-    m_worker = nullptr;
-
-    if (m_resource) {
-        m_resource->unlock();
-        delete m_resource;
-        m_resource = nullptr;
     }
 
-    for (auto dev : m_devices)
-        delete static_cast<GpuDevice*>(dev);
-    m_devices.clear();
+    d->done = true;
+    d->cv.notify_one();
+    d->worker->join();
+    delete d->worker;
+
+    if (d->resource) {
+        d->resource->unlock();
+        delete d->resource;
+    }
+
+    for (auto *gpu : d->devices)
+        delete gpu;
+
+    delete d;
 }
 
 
 void AmdSmiDataSource::startTracing()
 {
-    std::unique_lock<std::mutex> lock(m_mutex);
-    m_loggingActive = true;
-    m_cv.notify_one();
+    std::unique_lock<std::mutex> lock(d->mutex);
+    d->loggingActive = true;
+    d->cv.notify_one();
 }
 
 
 void AmdSmiDataSource::stopTracing()
 {
-    std::unique_lock<std::mutex> lock(m_mutex);
-    m_loggingActive = false;
+    std::unique_lock<std::mutex> lock(d->mutex);
+    d->loggingActive = false;
     lock.unlock();
 
     Logger &logger = Logger::singleton();
@@ -325,11 +382,10 @@ void AmdSmiDataSource::flush()
 }
 
 
-// ---- Read gpu_metrics and extract values for all enabled slots ----
+// ---- Read gpu_metrics ----
 
 static bool readGpuMetrics(GpuDevice &gpu, gpu_metrics_v1_base &out)
 {
-    // Re-open each read; sysfs files don't support lseek reliably
     int fd = open(gpu.metricsPath.c_str(), O_RDONLY);
     if (fd < 0)
         return false;
@@ -352,41 +408,43 @@ static bool readGpuMetrics(GpuDevice &gpu, gpu_metrics_v1_base &out)
 }
 
 
-bool AmdSmiDataSource::collectSlot(MetricSlot &slot,
-                                   void *devPtr,
-                                   sqlite3_int64 &valueOut)
+// ---- Metric collection ----
+
+bool AmdSmiDataSourcePrivate::collectSlot(MetricSlot &slot,
+                                          gpu_metrics_v1_base &m,
+                                          sqlite3_int64 &valueOut)
 {
-    auto *m = static_cast<gpu_metrics_v1_base*>(devPtr);
+    using MF = AmdSmiDataSource::MetricFlag;
     int raw;
 
     switch (slot.flag) {
-    case METRIC_GPU_UTIL:
-        if (m->average_gfx_activity == UINT16_MAX) return false;
-        raw = m->average_gfx_activity; break;
-    case METRIC_MEM_UTIL:
-        if (m->average_umc_activity == UINT16_MAX) return false;
-        raw = m->average_umc_activity; break;
-    case METRIC_MM_UTIL:
-        if (m->average_mm_activity == UINT16_MAX) return false;
-        raw = m->average_mm_activity; break;
-    case METRIC_SCLK:
-        if (m->current_gfxclk == UINT16_MAX) return false;
-        raw = m->current_gfxclk; break;
-    case METRIC_MCLK:
-        if (m->current_uclk == UINT16_MAX) return false;
-        raw = m->current_uclk; break;
-    case METRIC_TEMP_EDGE:
-        if (m->temperature_edge == UINT16_MAX) return false;
-        raw = m->temperature_edge; break;
-    case METRIC_TEMP_HOTSPOT:
-        if (m->temperature_hotspot == UINT16_MAX) return false;
-        raw = m->temperature_hotspot; break;
-    case METRIC_TEMP_MEM:
-        if (m->temperature_mem == UINT16_MAX) return false;
-        raw = m->temperature_mem; break;
-    case METRIC_POWER:
-        if (m->average_socket_power == UINT16_MAX) return false;
-        raw = m->average_socket_power; break;
+    case MF::METRIC_GPU_UTIL:
+        if (m.average_gfx_activity == UINT16_MAX) return false;
+        raw = m.average_gfx_activity; break;
+    case MF::METRIC_MEM_UTIL:
+        if (m.average_umc_activity == UINT16_MAX) return false;
+        raw = m.average_umc_activity; break;
+    case MF::METRIC_MM_UTIL:
+        if (m.average_mm_activity == UINT16_MAX) return false;
+        raw = m.average_mm_activity; break;
+    case MF::METRIC_SCLK:
+        if (m.current_gfxclk == UINT16_MAX) return false;
+        raw = m.current_gfxclk; break;
+    case MF::METRIC_MCLK:
+        if (m.current_uclk == UINT16_MAX) return false;
+        raw = m.current_uclk; break;
+    case MF::METRIC_TEMP_EDGE:
+        if (m.temperature_edge == UINT16_MAX) return false;
+        raw = m.temperature_edge; break;
+    case MF::METRIC_TEMP_HOTSPOT:
+        if (m.temperature_hotspot == UINT16_MAX) return false;
+        raw = m.temperature_hotspot; break;
+    case MF::METRIC_TEMP_MEM:
+        if (m.temperature_mem == UINT16_MAX) return false;
+        raw = m.temperature_mem; break;
+    case MF::METRIC_POWER:
+        if (m.average_socket_power == UINT16_MAX) return false;
+        raw = m.average_socket_power; break;
     default:
         return false;
     }
@@ -404,44 +462,41 @@ bool AmdSmiDataSource::collectSlot(MetricSlot &slot,
 
 // ---- Worker thread ----
 
-void AmdSmiDataSource::work()
+void AmdSmiDataSourcePrivate::work()
 {
-    auto gpus = enumerateGpus();
-    if (gpus.empty())
+    devices = enumerateGpus();
+    if (devices.empty())
         return;
-
-    for (auto &gpu : gpus)
-        m_devices.push_back(new GpuDevice(std::move(gpu)));
 
     buildSlots();
 
     // Block until startTracing() fires.  Logger construction is complete
     // by that point, so Logger::singleton() is safe to call.
     {
-        std::unique_lock<std::mutex> lock(m_mutex);
-        m_cv.wait(lock, [&]{ return m_loggingActive || m_done.load(); });
+        std::unique_lock<std::mutex> lock(mutex);
+        cv.wait(lock, [&]{ return loggingActive || done.load(); });
     }
-    if (m_done) return;
+    if (done) return;
 
     Logger &logger = Logger::singleton();
 
     const char *dbfile = getenv("RPDT_FILENAME");
     if (dbfile == nullptr)
         dbfile = "./trace.rpd";
-    m_resource = new DbResource(std::string(dbfile), std::string("amdsmi_logger_active"));
-    bool haveResource = m_resource->tryLock();
+    resource = new DbResource(std::string(dbfile), std::string("amdsmi_logger_active"));
+    bool haveResource = resource->tryLock();
 
-    std::vector<gpu_metrics_v1_base> metricsCache(m_devices.size());
+    std::vector<gpu_metrics_v1_base> metricsCache(devices.size());
 
-    while (!m_done) {
-        if (haveResource && m_loggingActive) {
-            for (size_t i = 0; i < m_devices.size(); ++i)
-                readGpuMetrics(*static_cast<GpuDevice*>(m_devices[i]), metricsCache[i]);
+    while (!done) {
+        if (haveResource && loggingActive) {
+            for (size_t i = 0; i < devices.size(); ++i)
+                readGpuMetrics(*devices[i], metricsCache[i]);
 
             sqlite3_int64 value;
-            for (auto &slot : m_slots) {
+            for (auto &slot : slots) {
                 auto &mc = metricsCache[slot.deviceIdx];
-                if (collectSlot(slot, &mc, value)) {
+                if (collectSlot(slot, mc, value)) {
                     MonitorTable::row mrow;
                     mrow.deviceId = slot.deviceIdx;
                     mrow.deviceType = slot.deviceType;
@@ -454,13 +509,13 @@ void AmdSmiDataSource::work()
             }
         }
 
-        std::unique_lock<std::mutex> lock(m_mutex);
-        if (m_done) break;
+        std::unique_lock<std::mutex> lock(mutex);
+        if (done) break;
         auto waitTime = std::chrono::microseconds(
-            haveResource ? m_periodUs : m_periodUs * 10);
-        m_cv.wait_for(lock, waitTime);
+            haveResource ? periodUs : 1000000);
+        cv.wait_for(lock, waitTime);
 
         if (!haveResource)
-            haveResource = m_resource->tryLock();
+            haveResource = resource->tryLock();
     }
 }

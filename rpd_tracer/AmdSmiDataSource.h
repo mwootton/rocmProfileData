@@ -4,19 +4,12 @@
 #pragma once
 
 #include "DataSource.h"
-#include "DbResource.h"
 
-#include <sqlite3.h>
-#include <thread>
-#include <mutex>
-#include <condition_variable>
-#include <atomic>
-#include <climits>
-#include <vector>
-#include <string>
+#include <cstdint>
 
 namespace rpdtracer {
 
+class AmdSmiDataSourcePrivate;
 class AmdSmiDataSource : public DataSource
 {
 public:
@@ -43,35 +36,8 @@ public:
         METRIC_GPU_UTIL | METRIC_SCLK | METRIC_TEMP_HOTSPOT | METRIC_POWER;
 
 private:
-    std::mutex m_mutex;
-    std::condition_variable m_cv;
-    std::atomic<bool> m_loggingActive {false};
-    DbResource *m_resource {nullptr};
-
-    void work();
-    std::thread *m_worker {nullptr};
-    std::atomic<bool> m_done {false};
-    int m_periodUs {2000};    // 500 Hz
-
-    // Cached device handles (GpuDevice pointers, defined in .cpp)
-    std::vector<void*> m_devices;
-
-    uint32_t m_enabledMetrics {METRIC_DEFAULT};
-
-    void parseConfig();
-    void buildSlots();
-
-    struct MetricSlot {
-        int deviceIdx;
-        uint32_t flag;
-        std::string deviceType;
-        std::string monitorType;
-        int lastEmitted {INT_MIN};
-        int deadband {0};
-    };
-    std::vector<MetricSlot> m_slots;
-
-    static bool collectSlot(MetricSlot &slot, void *dev, sqlite3_int64 &valueOut);
+    AmdSmiDataSourcePrivate *d;
+    friend class AmdSmiDataSourcePrivate;
 };
 
 }    // namespace rpdtracer
