@@ -9,8 +9,6 @@
 #include <unistd.h>
 #include <dirent.h>
 
-#include <fmt/format.h>
-
 #include <algorithm>
 #include <chrono>
 #include <string>
@@ -356,7 +354,7 @@ static bool readGpuMetrics(GpuDevice &gpu, gpu_metrics_v1_base &out)
 
 bool AmdSmiDataSource::collectSlot(MetricSlot &slot,
                                    void *devPtr,
-                                   std::string &valueOut)
+                                   sqlite3_int64 &valueOut)
 {
     auto *m = static_cast<gpu_metrics_v1_base*>(devPtr);
     int raw;
@@ -399,7 +397,7 @@ bool AmdSmiDataSource::collectSlot(MetricSlot &slot,
     }
     slot.lastEmitted = raw;
 
-    valueOut = fmt::format("{}", raw);
+    valueOut = raw;
     return true;
 }
 
@@ -440,7 +438,7 @@ void AmdSmiDataSource::work()
             for (size_t i = 0; i < m_devices.size(); ++i)
                 readGpuMetrics(*static_cast<GpuDevice*>(m_devices[i]), metricsCache[i]);
 
-            std::string value;
+            sqlite3_int64 value;
             for (auto &slot : m_slots) {
                 auto &mc = metricsCache[slot.deviceIdx];
                 if (collectSlot(slot, &mc, value)) {

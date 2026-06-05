@@ -33,7 +33,7 @@ using rpdtracer::MonitorTable;
 
 namespace rpdtracer {
 
-const char *SCHEMA_MONITOR = "CREATE TEMPORARY TABLE \"temp_rocpd_monitor\" (\"id\" integer NOT NULL PRIMARY KEY AUTOINCREMENT, \"deviceType\" varchar(16) NOT NULL, \"deviceId\" integer NOT NULL, \"monitorType\" varchar(16) NOT NULL, \"start\" integer NOT NULL, \"end\" integer NOT NULL, \"value\" varchar(255) NOT NULL)";
+const char *SCHEMA_MONITOR = "CREATE TEMPORARY TABLE \"temp_rocpd_monitor\" (\"id\" integer NOT NULL PRIMARY KEY AUTOINCREMENT, \"deviceType\" varchar(16) NOT NULL, \"deviceId\" integer NOT NULL, \"monitorType\" varchar(16) NOT NULL, \"start\" integer NOT NULL, \"end\" integer NOT NULL, \"value\" integer NOT NULL)";
 
 class MonitorTablePrivate
 {
@@ -183,7 +183,7 @@ void MonitorTable::writeRows()
         sqlite3_bind_text(d->monitorInsert, index++, r.monitorType.c_str(), -1, SQLITE_STATIC);
         sqlite3_bind_int64(d->monitorInsert, index++, r.start);
         sqlite3_bind_int64(d->monitorInsert, index++, r.end);
-        sqlite3_bind_text(d->monitorInsert, index++, r.value.c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_int64(d->monitorInsert, index++, r.value);
 
         int ret = sqlite3_step(d->monitorInsert);
         sqlite3_reset(d->monitorInsert);

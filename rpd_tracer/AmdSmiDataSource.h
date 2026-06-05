@@ -71,7 +71,7 @@ private:
     };
     std::vector<MetricSlot> m_slots;
 
-    static bool collectSlot(MetricSlot &slot, void *dev, std::string &valueOut);
+    static bool collectSlot(MetricSlot &slot, void *dev, sqlite3_int64 &valueOut);
 };
 
 }    // namespace rpdtracer
