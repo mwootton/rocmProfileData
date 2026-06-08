@@ -58,7 +58,7 @@ int main(int argc, char **argv) {
     setenv("RPDT_DATASOURCES_EXCLUDE",
         "ClrDataSource,RoctracerDataSource,RocprofDataSource,CuptiDataSource", 1);
 
-    if (dlopen("librpd_tracer.so", RTLD_NOW) == NULL) {
+    if (dlopen("librpd_tracer.so", RTLD_NOW | RTLD_GLOBAL) == NULL) {
         fprintf(stderr, "rpdrun: failed to load librpd_tracer.so: %s\n", dlerror());
         return 1;
     }
@@ -72,6 +72,8 @@ int main(int argc, char **argv) {
         setenv("RPDT_DELAYINIT", delayinit_buf, 1);
     else
         unsetenv("RPDT_DELAYINIT");
+    unsetenv("RPDT_DATASOURCES_EXCLUDE");
+    unsetenv("RPDT_QUIET");
 
     setenv("LD_PRELOAD", "librpd_tracer.so", 1);
 

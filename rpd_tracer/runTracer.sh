@@ -45,11 +45,12 @@ if [ "$LOAD_ONLY" = "1" ]; then
   export RPDT_DELAYINIT=1
 fi
 
-if [ -n "$RANK" ]; then
+if [ -n "$RANK" ] && [ -n "$MASTER" ]; then
   export RPDT_CLOCKSYNC_RANK=${RANK}
-  if [ -n "$MASTER" ]; then
-    export RPDT_CLOCKSYNC_MASTER=${MASTER}
-  fi
+  export RPDT_CLOCKSYNC_MASTER=${MASTER}
+  export RPDT_NODE_ID=${RANK}
+  export RPDT_LOGAGG_HOST=${MASTER}
+  export RPDT_LOGAGG_PORT=29223
   DELAY_ARG=""
   if [ "$RANK" = "0" ]; then
     DELAY_ARG="--exit-delay ${EXIT_DELAY}"
