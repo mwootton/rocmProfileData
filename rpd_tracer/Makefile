@@ -33,7 +33,8 @@ ifneq (,$(HIP_PATH))
         endif
 
         RPD_LIBS += -L/opt/rocm/lib
-        RPD_LIBS += -lamdhip64 #-lrocm_smi64
+        RPD_LIBS += -lamdhip64
+        RPD_SRCS += AmdSmiDataSource.cpp
 
         RPD_INCLUDES += -D__HIP_PLATFORM_AMD__
         RPD_INCLUDES += -I/opt/rocm/include -I/opt/rocm/include/hsa

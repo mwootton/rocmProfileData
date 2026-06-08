@@ -246,7 +246,7 @@ void Logger::init()
         "RocprofDataSourceFactory",
         "RoctracerDataSourceFactory",
         "CuptiDataSourceFactory",
-        "RocmSmiDataSourceFactory"
+        "AmdSmiDataSourceFactory"
         };
 
     for (auto it = factories.begin(); it != factories.end(); ++it) {

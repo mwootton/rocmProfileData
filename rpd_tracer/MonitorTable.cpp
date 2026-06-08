@@ -33,7 +33,7 @@ using rpdtracer::MonitorTable;
 
 namespace rpdtracer {
 
-const char *SCHEMA_MONITOR = "CREATE TEMPORARY TABLE \"temp_rocpd_monitor\" (\"id\" integer NOT NULL PRIMARY KEY AUTOINCREMENT, \"deviceType\" varchar(16) NOT NULL, \"deviceId\" integer NOT NULL, \"monitorType\" varchar(16) NOT NULL, \"start\" integer NOT NULL, \"end\" integer NOT NULL, \"value\" varchar(255) NOT NULL)";
+const char *SCHEMA_MONITOR = "CREATE TEMPORARY TABLE \"temp_rocpd_monitor\" (\"id\" integer NOT NULL PRIMARY KEY AUTOINCREMENT, \"deviceType\" varchar(16) NOT NULL, \"deviceId\" integer NOT NULL, \"monitorType\" varchar(16) NOT NULL, \"start\" integer NOT NULL, \"end\" integer NOT NULL, \"value\" integer NOT NULL)";
 
 class MonitorTablePrivate
 {
@@ -51,9 +51,9 @@ public:
     public:
         bool operator() (const MonitorTable::row& lhs, const MonitorTable::row& rhs) const
         {
-            return lhs.deviceId < rhs.deviceId
-                || lhs.monitorType < rhs.monitorType
-                || lhs.deviceType < rhs.deviceType;
+            if (lhs.deviceId != rhs.deviceId) return lhs.deviceId < rhs.deviceId;
+            if (lhs.monitorType != rhs.monitorType) return lhs.monitorType < rhs.monitorType;
+            return lhs.deviceType < rhs.deviceType;
         }
     };
 
@@ -152,6 +152,7 @@ void MonitorTable::flushRows()
     int ret = 0;
     ret = sqlite3_exec(m_connection, "begin transaction", NULL, NULL, NULL);
     ret = sqlite3_exec(m_connection, "insert into rocpd_monitor(deviceType, deviceId, monitorType, start, end, value) select deviceType, deviceId, monitorType, start, end, value from temp_rocpd_monitor", NULL, NULL, NULL);
+    fprintf(stderr, "rocpd_monitor: %d\n", ret);
     ret = sqlite3_exec(m_connection, "delete from temp_rocpd_monitor", NULL, NULL, NULL);
     ret = sqlite3_exec(m_connection, "commit", NULL, NULL, NULL);
 }
@@ -182,7 +183,7 @@ void MonitorTable::writeRows()
         sqlite3_bind_text(d->monitorInsert, index++, r.monitorType.c_str(), -1, SQLITE_STATIC);
         sqlite3_bind_int64(d->monitorInsert, index++, r.start);
         sqlite3_bind_int64(d->monitorInsert, index++, r.end);
-        sqlite3_bind_text(d->monitorInsert, index++, r.value.c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_int64(d->monitorInsert, index++, r.value);
 
         int ret = sqlite3_step(d->monitorInsert);
         sqlite3_reset(d->monitorInsert);
