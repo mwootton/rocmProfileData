@@ -334,8 +334,12 @@ void AmdSmiDataSource::init()
 
 void AmdSmiDataSource::end()
 {
+    if (d == nullptr)
+        return;
+
     if (d->worker == nullptr) {
         delete d;
+        d = nullptr;
         return;
     }
 
@@ -353,6 +357,7 @@ void AmdSmiDataSource::end()
         delete gpu;
 
     delete d;
+    d = nullptr;
 }
 
 
