@@ -53,10 +53,15 @@ void RocmSmiDataSource::end()
     std::unique_lock<std::mutex> lock(m_mutex);
     m_done = true;
     lock.unlock();
-    m_worker->join();
-    delete m_worker;
+    if (m_worker != nullptr) {
+        m_worker->join();
+        delete m_worker;
+        m_worker = nullptr;
+    }
 
-    m_resource->unlock();
+    if (m_resource != nullptr) {
+        m_resource->unlock();
+    }
 
     rsmi_status_t ret;
     ret = rsmi_shut_down();

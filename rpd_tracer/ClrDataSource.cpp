@@ -63,13 +63,16 @@ void ClrDataSource::stopTracing()
 {
     uint64_t endId;
     (void)hipProfilerDisableExt(&endId);
-    m_ranges.back().end = endId;
+    if (!m_ranges.empty())
+        m_ranges.back().end = endId;
 }
 
 
 void ClrDataSource::chunkCallback(const hipApiRecordExt* records, uint32_t count,
                                   uint32_t chunk_id, void* user_data)
 {
+    if (count == 0)
+        return;
     const timestamp_t begin_time = clocktime_ns();
     ClrDataSource* self = static_cast<ClrDataSource*>(user_data);
     for (uint32_t i = 0; i < count; ++i)

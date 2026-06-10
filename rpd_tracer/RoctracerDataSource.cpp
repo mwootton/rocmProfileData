@@ -962,6 +962,7 @@ void RoctracerDataSource::end() {
     roctracer_flush_activity();
     roctracer_flush_activity_expl(m_hccPool);
     m_hccPool = nullptr;
+    s_instance = nullptr;
 }
 
 uint32_t RocmApiIdList::mapName(const std::string &apiName)

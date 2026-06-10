@@ -243,6 +243,7 @@ public:
     static RocprofDataSourceShared& singleton();
 
     rocprofiler_client_id_t *clientId {nullptr};
+    rocprofiler_client_finalize_t finalizer {nullptr};
     rocprofiler_tool_configure_result_t cfg = rocprofiler_tool_configure_result_t{
                                             sizeof(rocprofiler_tool_configure_result_t),
                                             &RocprofDataSource::toolInit,
@@ -343,20 +344,28 @@ void RocprofDataSource::init()
     stopTracing();
 }
 
-void RocprofDataSource::end() 
+void RocprofDataSource::end()
 {
     flush();
+
+    if (s != nullptr && s->finalizer != nullptr && s->clientId != nullptr) {
+        s->finalizer(*s->clientId);
+        s->finalizer = nullptr;
+        s->clientId = nullptr;
+    }
 }
 
 void RocprofDataSource::startTracing()
 {
-    assert(s->contexts[d->id].handle != 0);
+    if (s->contexts[d->id].handle == 0)
+        return;
     rocprofiler_start_context(s->contexts[d->id]);
 }
 
 void RocprofDataSource::stopTracing()
 {
-    assert(s->contexts[d->id].handle != 0);
+    if (s->contexts[d->id].handle == 0)
+        return;
     rocprofiler_stop_context(s->contexts[d->id]);
 }
 
@@ -812,6 +821,8 @@ rocprofiler_configure(uint32_t                 version,
 
 int RocprofDataSource::toolInit(rocprofiler_client_finalize_t finialize_func, void* tool_data)
 {
+    s->finalizer = finialize_func;
+
     //s->name_info = common::get_buffer_tracing_names();
     s->name_info = rocprofiler::sdk::get_buffer_tracing_names();  // FIXME: decide
     //s->name_info = rocprofiler::sdk::get_callback_tracing_names();
@@ -956,19 +967,18 @@ int RocprofDataSource::toolInit(rocprofiler_client_finalize_t finialize_func, vo
 
 void RocprofDataSource::toolFinialize(void* tool_data)
 {
-    // This seems to happen pretty early.  So simulate a shutdown and disable context
-    //fprintf(stderr, "RocprofDataSource::toolFinalize\n");
+    if (s == nullptr)
+        return;
 
-    //end();	// FIXME: singleton - figure out startup order and teardown order
-
-    // FIXME: kernel code objects are already being removed by this point
-    //        keeping names (only) around to remedy this
-
-    rocprofiler_stop_context(s->utilityContext);
-    s->utilityContext.handle = 0;    // save us from ourselves
+    if (s->utilityContext.handle != 0) {
+        rocprofiler_stop_context(s->utilityContext);
+        s->utilityContext.handle = 0;
+    }
     for (auto &context : s->contexts) {
-        rocprofiler_stop_context(context);
-        context.handle = 0;
+        if (context.handle != 0) {
+            rocprofiler_stop_context(context);
+            context.handle = 0;
+        }
     }
 }
 

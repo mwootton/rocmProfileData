@@ -279,6 +279,10 @@ void Logger::finalize()
         for (auto it = m_sources.begin(); it != m_sources.end(); ++it)
             (*it)->end();
 
+        for (auto it = m_sources.begin(); it != m_sources.end(); ++it)
+            delete (*it);
+        m_sources.clear();
+
         m_writeOverheadRecords = false;
         m_storage->finalize();
     }

@@ -28,7 +28,7 @@ namespace rpdtracer {
 class DataSource
 {
 public:
-    //DataSource();
+    virtual ~DataSource() = default;
     virtual void init() = 0;
     virtual void end() = 0;
     virtual void startTracing() = 0;
