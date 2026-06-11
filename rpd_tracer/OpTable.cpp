@@ -83,9 +83,8 @@ public:
         for (int i = start; i <= end; ++i) {
             int index = 1;
             OpTable::row &r = rows[i % capacity];
-            sqlite3_int64 primaryKey = i + m_idOffset;
 
-            sqlite3_bind_int64(m_opInsert, index++, primaryKey);
+            sqlite3_bind_int64(m_opInsert, index++, r.op_id + m_idOffset);
             sqlite3_bind_int(m_opInsert, index++, r.gpuId);
             sqlite3_bind_int(m_opInsert, index++, r.queueId);
             sqlite3_bind_int(m_opInsert, index++, r.sequenceId);
@@ -98,7 +97,7 @@ public:
 
             index = 1;
             sqlite3_bind_int64(m_apiOpInsert, index++, sqlite3_int64(r.api_id) + m_idOffset);
-            sqlite3_bind_int64(m_apiOpInsert, index++, sqlite3_int64(i) + m_idOffset);
+            sqlite3_bind_int64(m_apiOpInsert, index++, r.op_id + m_idOffset);
             sqlite3_step(m_apiOpInsert);
             sqlite3_reset(m_apiOpInsert);
         }
@@ -179,7 +178,9 @@ void OpTable::insert(const OpTable::row &row)
         m_wait.wait(lock);
     }
 
-    d->rows[(++m_head) % OpTablePrivate::BUFFERSIZE] = row;
+    int pos = (++m_head) % OpTablePrivate::BUFFERSIZE;
+    d->rows[pos] = row;
+    d->rows[pos].op_id = m_head;
 
     if (workerRunning() == false && (m_head - m_tail) >= OpTablePrivate::BATCHSIZE) {
         m_wait.notify_one();
@@ -237,6 +238,7 @@ void OpTable::row::serialize(ByteBuffer &buf) const {
     buf.writeInt64(description_id);
     buf.writeInt64(opType_id);
     buf.writeInt64(api_id);
+    buf.writeInt64(op_id);
 }
 
 void OpTable::row::deserialize(ByteBuffer &buf) {
@@ -248,6 +250,7 @@ void OpTable::row::deserialize(ByteBuffer &buf) {
     description_id = buf.readInt64();
     opType_id = buf.readInt64();
     api_id = buf.readInt64();
+    op_id = buf.readInt64();
 }
 
 }  // namespace rpdtracer
