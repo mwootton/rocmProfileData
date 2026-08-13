@@ -9,4 +9,5 @@
 	url = https://github.com/jeremy-rifkin/cpptrace.git
 [submodule "rlog"]
 	path = rlog
-	url = https://github.com/ROCm/rlog.git
+	url = https://github.com/ROCm/rocmProfileData.git
+	branch = rlog

@@ -8,6 +8,7 @@ This is a changelog that describes new features as they are added.  Newest first
 Contents:
 <!-- toc -->
 
+- [rpd-viewer](#rpd-viewer)
 - [Schema v3](#schema-v3)
 - [Remote Start/stop](#remote-startstop)
 - [Graph Subclass](#graph-subclass)
@@ -18,6 +19,22 @@ Contents:
 - [Schema v2](#schema-v2)
 
 <!-- tocstop -->
+
+
+--------------------------------------------------------------------------------
+## rpd-viewer
+
+Interactive browser-based trace viewer for `.rpd` files. Installed as the `rpd-viewer` command.
+
+```
+rpd-viewer trace.rpd
+```
+
+Core views include kernel summary, API calls, GPU ops, memory copies with bandwidth, timeline/Perfetto integration, GPU monitor, graphs, autograd, and metadata.
+
+Analysis pages provide TraceLens-style reports: GPU timeline breakdown (compute/communication/memcpy/idle with overlap accounting), kernel categorization, short kernel analysis, PyTorch operator summary with GPU time attribution, and operator categorization. These adapt automatically to the data available -- annotated traces (with torch/miopen domains) unlock the full set of analysis pages.
+
+See [docs/README_rpd-viewer.md](docs/README_rpd-viewer.md) for details.
 
 
 --------------------------------------------------------------------------------
@@ -44,6 +61,7 @@ The initial use of *rocpd_ustring* is in the *rocpd_api(args_id)* column which h
 The key-value pair in metadata (*rocpd_metadata*) with the schema version is now ("schema_version", "3")
 
 
+--------------------------------------------------------------------------------
 ## Remote Start/stop
 Recording can be started and stoped externally through a loader, librpd_remote.so
 
@@ -69,6 +87,7 @@ Limitations:
 - Once loaded, the tracer will record into the same file for the duration.  You can not replace the file on the fly.
 
 
+--------------------------------------------------------------------------------
 ## Graph Subclass
 Additional graph analysis is available via a post-processing tool.  This uses graph api calls to identify graph captures, kernels, and subsequent launches.  
 

@@ -213,8 +213,15 @@ tags
 
 # rpd stuff
 *.rpd
+*.rpd-shm
+*.rpd-wal
 *.json
 *.o
 *.d
+
+# data / output files
+*.csv
+*.dif
+*.html
 
 # End of https://www.gitignore.io/api/vim,python,django

@@ -35,7 +35,7 @@ ifneq (,$(HIP_PATH))
         endif
 
         RPD_LIBS += -L$(HIP_PATH)/lib
-        RPD_LIBS += -lamdhip64 #-lrocm_smi64
+        RPD_LIBS += -lamdhip64
 
         RPD_INCLUDES += -D__HIP_PLATFORM_AMD__
         RPD_INCLUDES += -I$(HIP_PATH)/include -I$(HIP_PATH)/include/hsa

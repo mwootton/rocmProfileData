@@ -1,24 +1,5 @@
-/*********************************************************************************
-* Copyright (c) 2021 - 2023 Advanced Micro Devices, Inc. All rights reserved.
-*
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-*
-* The above copyright notice and this permission notice shall be included in
-* all copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-* THE SOFTWARE.
-********************************************************************************/
+// Copyright (C) Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
 #include "Table.h"
 #include "WriterBackend.h"
 #include "ByteBuffer.h"
@@ -36,7 +17,7 @@ using rpdtracer::MonitorTable;
 
 namespace rpdtracer {
 
-const char *SCHEMA_MONITOR = "CREATE TEMPORARY TABLE \"temp_rocpd_monitor\" (\"id\" integer NOT NULL PRIMARY KEY AUTOINCREMENT, \"deviceType\" varchar(16) NOT NULL, \"deviceId\" integer NOT NULL, \"monitorType\" varchar(16) NOT NULL, \"start\" integer NOT NULL, \"end\" integer NOT NULL, \"value\" varchar(255) NOT NULL)";
+const char *SCHEMA_MONITOR = "CREATE TEMPORARY TABLE \"temp_rocpd_monitor\" (\"id\" integer NOT NULL PRIMARY KEY AUTOINCREMENT, \"deviceType\" varchar(16) NOT NULL, \"deviceId\" integer NOT NULL, \"monitorType\" varchar(16) NOT NULL, \"start\" integer NOT NULL, \"end\" integer NOT NULL, \"value\" integer NOT NULL)";
 
 
 class MonitorTableWriterBackend : public WriterBackend
@@ -78,7 +59,7 @@ public:
             sqlite3_bind_text(m_monitorInsert, index++, r.monitorType.c_str(), -1, SQLITE_STATIC);
             sqlite3_bind_int64(m_monitorInsert, index++, r.start);
             sqlite3_bind_int64(m_monitorInsert, index++, r.end);
-            sqlite3_bind_text(m_monitorInsert, index++, r.value.c_str(), -1, SQLITE_STATIC);
+            sqlite3_bind_int64(m_monitorInsert, index++, r.value);
 
             sqlite3_step(m_monitorInsert);
             sqlite3_reset(m_monitorInsert);
@@ -133,9 +114,9 @@ public:
     public:
         bool operator() (const MonitorTable::row& lhs, const MonitorTable::row& rhs) const
         {
-            return lhs.deviceId < rhs.deviceId
-                || lhs.monitorType < rhs.monitorType
-                || lhs.deviceType < rhs.deviceType;
+            if (lhs.deviceId != rhs.deviceId) return lhs.deviceId < rhs.deviceId;
+            if (lhs.monitorType != rhs.monitorType) return lhs.monitorType < rhs.monitorType;
+            return lhs.deviceType < rhs.deviceType;
         }
     };
 
@@ -259,7 +240,7 @@ void MonitorTable::row::serialize(ByteBuffer &buf) const {
     buf.writeInt64(deviceId);
     buf.writeInt64(start);
     buf.writeInt64(end);
-    buf.writeString(value);
+    buf.writeInt64(value);
 }
 
 void MonitorTable::row::deserialize(ByteBuffer &buf) {
@@ -268,7 +249,7 @@ void MonitorTable::row::deserialize(ByteBuffer &buf) {
     deviceId = buf.readInt64();
     start = buf.readInt64();
     end = buf.readInt64();
-    value = buf.readString();
+    value = buf.readInt64();
 }
 
 }  // namespace rpdtracer

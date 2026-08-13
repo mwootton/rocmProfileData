@@ -324,7 +324,7 @@ public:
         sqlite3_int64 deviceId;
         sqlite3_int64 start;
         sqlite3_int64 end;
-        std::string value;
+        sqlite3_int64 value;
         void serialize(ByteBuffer &buf) const;
         void deserialize(ByteBuffer &buf);
     };
