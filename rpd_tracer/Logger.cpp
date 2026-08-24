@@ -186,6 +186,7 @@ void Logger::init()
         "RocprofDataSourceFactory",
         "ClrDataSourceFactory",
         "RoctracerDataSourceFactory",
+        "RtlDataSourceFactory",
         "CuptiDataSourceFactory"
         };
 
