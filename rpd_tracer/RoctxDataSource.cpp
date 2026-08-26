@@ -92,6 +92,24 @@ static void registerThreadStack()
     static thread_local StackRegistrator registrator;
 }
 
+static void drainStacks()
+{
+    timestamp_t now = clocktime_ns();
+    Logger &logger = Logger::singleton();
+
+    std::lock_guard<std::mutex> lock(s_stacksMutex);
+    for (auto &entry : s_stacks) {
+        auto &stack = *entry.second;
+        while (!stack.empty()) {
+            ApiTable::row row = stack.front();
+            stack.pop_front();
+            row.end = now;
+            row.api_id = Logger::singleton().nextAnnotationId();
+            logger.apiTable().insert(row);
+        }
+    }
+}
+
 
 void RoctxDataSourcePrivate::cacheIds()
 {
@@ -203,6 +221,10 @@ void RoctxDataSource::startTracing()
 void RoctxDataSource::stopTracing()
 {
     d->active.store(false, std::memory_order_relaxed);
+
+    // Drain in-flight ranges so their string ids (valid only in the
+    // current storage) cannot outlive a resetStorage()
+    drainStacks();
 }
 
 void RoctxDataSource::flush()
@@ -217,20 +239,5 @@ void RoctxDataSource::reset()
 void RoctxDataSource::end()
 {
     d->active.store(false, std::memory_order_relaxed);
-
-    // Final shutdown: drain all in-flight ranges
-    timestamp_t now = clocktime_ns();
-    Logger &logger = Logger::singleton();
-
-    std::lock_guard<std::mutex> lock(s_stacksMutex);
-    for (auto &entry : s_stacks) {
-        auto &stack = *entry.second;
-        while (!stack.empty()) {
-            ApiTable::row row = stack.front();
-            stack.pop_front();
-            row.end = now;
-            row.api_id = Logger::singleton().nextAnnotationId();
-            logger.apiTable().insert(row);
-        }
-    }
+    drainStacks();
 }
