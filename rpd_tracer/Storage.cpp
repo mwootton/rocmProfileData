@@ -26,6 +26,8 @@ Storage::Storage(const char *filename, bool directWrite)
     m_monitorTable = new MonitorTable(filename, directWrite);
     m_stackFrameTable = new StackFrameTable(filename, directWrite);
 
+    m_metadataTable->insert("session", fmt::format("id={} pid={}", m_metadataTable->sessionId(), GetPid()));
+
     sqlite3_int64 offset = m_metadataTable->sessionId() * (sqlite3_int64(1) << 32);
     m_metadataTable->setIdOffset(offset);
     m_stringTable->setIdOffset(offset);
@@ -61,6 +63,8 @@ void Storage::flush()
     m_apiTable->flush();
     m_monitorTable->flush();
     m_stackFrameTable->flush();
+
+    sqlite3_exec(m_stringTable->connection(), "PRAGMA wal_checkpoint(TRUNCATE)", NULL, NULL, NULL);
 }
 
 void Storage::finalize()
@@ -79,8 +83,11 @@ void Storage::finalize()
     m_ustringTable->finalize();
     m_stringTable->finalize();
 
+    // Checkpoint WAL into main database before connections close
+    sqlite3_exec(m_stringTable->connection(), "PRAGMA wal_checkpoint(TRUNCATE)", NULL, NULL, NULL);
+
     const timestamp_t end_time = clocktime_ns();
-    fprintf(stderr, "rpd_tracer: finalized in %f ms\n", 1.0 * (end_time - begin_time) / 1000000);
+    rpdLog("rpd_tracer: finalized in %f ms\n", 1.0 * (end_time - begin_time) / 1000000);
 }
 
 sqlite3_int64 Storage::sessionId() const

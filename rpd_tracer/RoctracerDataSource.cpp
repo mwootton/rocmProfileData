@@ -4,7 +4,7 @@
 
 #include <roctracer/roctracer_hip.h>
 #include <roctracer/roctracer_ext.h>
-
+#include <roctracer/roctracer_roctx.h>
 #include <hsa/hsa_ext_amd.h>
 
 #include <sqlite3.h>
@@ -869,12 +869,12 @@ void RoctracerDataSource::init() {
     m_apiList.add("__hipPushCallConfiguration");
     m_apiList.add("__hipPopCallConfiguration");
     m_apiList.add("hipCtxSetCurrent");
-    m_apiList.add("hipEventRecord");
-    m_apiList.add("hipEventQuery");
-    m_apiList.add("hipGetDeviceProperties");
+    m_apiList.add("hipGetDevicePropertiesR0600");
+    m_apiList.add("hipGetDeviceCount");
+    m_apiList.add("hipDeviceGetAttribute");
+    m_apiList.add("hipRuntimeGetVersion");
     m_apiList.add("hipPeekAtLastError");
     m_apiList.add("hipModuleGetFunction");
-    m_apiList.add("hipEventCreateWithFlags");
 
     // roctracer properties
     //    Whatever the hell that means.  Magic encantation, thanks.

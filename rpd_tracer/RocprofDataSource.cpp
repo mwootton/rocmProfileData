@@ -780,8 +780,11 @@ rocprofiler_configure(uint32_t                 version,
                       uint32_t                 priority,
                       rocprofiler_client_id_t* id)
 {
+    // If a RocprofilerDataSource instance hasn't been create yet, just pass
     if (s == nullptr)
         return nullptr;
+
+    //RocprofDataSourceShared::singleton();	// CRITICAL: static init
 
     id->name = "rpd_tracer";
     s->clientId = id;
@@ -842,7 +845,10 @@ int RocprofDataSource::toolInit(rocprofiler_client_finalize_t finialize_func, vo
     apiList.add("__hipPushCallConfiguration");
     apiList.add("__hipPopCallConfiguration");
     apiList.add("hipCtxSetCurrent");
-    apiList.add("hipGetDeviceProperties");
+    apiList.add("hipGetDevicePropertiesR0600");
+    apiList.add("hipGetDeviceCount");
+    apiList.add("hipDeviceGetAttribute");
+    apiList.add("hipRuntimeGetVersion");
     apiList.add("hipPeekAtLastError");
     apiList.add("hipModuleGetFunction");
 
@@ -927,7 +933,8 @@ int RocprofDataSource::toolInit(rocprofiler_client_finalize_t finialize_func, vo
             context.handle = 0;   // Can't destroy it, so leak it
             return -1;
         }
-        rocprofiler_start_context(context);
+        //rocprofiler_start_context(context);
+        rocprofiler_stop_context(context);
     }
 
     return 0;

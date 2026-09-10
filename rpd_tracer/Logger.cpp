@@ -2,10 +2,14 @@
 // SPDX-License-Identifier: MIT
 #include "Logger.h"
 
+#include <algorithm>
 #include <list>
+#include <vector>
+#include <mutex>
 #include <stdio.h>
 #include <stdlib.h>
 #include <dlfcn.h>
+#include <fmt/format.h>
 
 #include "Utility.h"
 #include "Schema.h"
@@ -32,13 +36,7 @@ Logger& Logger::singleton()
 }
 
 void Logger::rpdInit() {
-    bool doInit = true;
-    char *val = getenv("RPDT_DELAYINIT");
-    if (val != NULL) {
-        int delayinit = atoi(val);
-        if (delayinit != 0)
-            doInit = false;
-    }
+    bool doInit = (atoi(getConfig("RPDT_DELAYINIT", "delayinit", "0")) == 0);
     if (doInit)
         Logger::singleton();
 
@@ -76,6 +74,13 @@ void Logger::resetStorage()
         m_done = false;
         m_worker = new std::thread(&Logger::autoflushWorker, this);
     }
+}
+
+sqlite3 *Logger::getConnection()
+{
+    sqlite3 *db = nullptr;
+    rpdSqliteOpen(m_storage->filename().c_str(), &db);
+    return db;
 }
 
 void Logger::rpdstart()
@@ -121,39 +126,94 @@ void Logger::rpdflush()
 
 void Logger::init()
 {
-    fprintf(stderr, "rpd_tracer, because\n");
+    rpdLog("rpd_tracer, because\n");
 
     rlogClientInit();
 
-    rlog::getProperty("rpd_tracer", "filename", "./trace.rpd");
     const char *filename = getConfig("RPDT_FILENAME", "filename", "./trace.rpd");
-    bool directWrite = false;
-
-    const char *dwrite = getenv("RPDT_DIRECTWRITE");
-    if (dwrite != nullptr) {
-        int val = atoi(dwrite);
-        directWrite = (val != 0);
-    }
+    bool directWrite = (atoi(getConfig("RPDT_DIRECTWRITE", "directwrite", "0")) != 0);
 
     m_storage = new Storage(filename, directWrite);
 
     // Create one instance of each available datasource
-    std::list<std::string> factories = {
-        "RoctxDataSourceFactory",
-        "NvtxDataSourceFactory",
+    std::list<std::string> factories;
+
+    // RPDT_DATASOURCES_EXPLICIT: if set, use only these datasources (nothing else).
+    const char *dsexplicit = getConfig("RPDT_DATASOURCES_EXPLICIT", "datasources_explicit", "");
+    if (dsexplicit[0] != '\0') {
+        std::string dslist(dsexplicit);
+        size_t pos = 0, end;
+        do {
+            end = dslist.find(',', pos);
+            std::string name = dslist.substr(pos, end == std::string::npos ? end : end - pos);
+            if (!name.empty())
+                factories.push_back(name + "Factory");
+            pos = end + 1;
+        } while (end != std::string::npos);
+    }
+    else {
+        factories = {
+            "ClrDataSourceFactory",
+            "RoctxDataSourceFactory",
+            "NvtxDataSourceFactory",
+            "RocprofDataSourceFactory",
+            "RoctracerDataSourceFactory",
+            "CuptiDataSourceFactory",
+            "RlogDataSourceFactory",
+            "RocmSmiDataSourceFactory"
+            };
+
+        const char *dsenv = getConfig("RPDT_DATASOURCES_PRIORITY", "datasources_priority", "");
+        if (dsenv[0] != '\0') {
+            std::vector<std::string> extra;
+            std::string dslist(dsenv);
+            size_t pos = 0, end;
+            do {
+                end = dslist.find(',', pos);
+                std::string name = dslist.substr(pos, end == std::string::npos ? end : end - pos);
+                if (!name.empty())
+                    extra.push_back(name + "Factory");
+                pos = end + 1;
+            } while (end != std::string::npos);
+            for (auto it = extra.rbegin(); it != extra.rend(); ++it) {
+                factories.remove(*it);
+                factories.push_front(*it);
+            }
+        }
+    }
+
+    // RPDT_DATASOURCES_EXCLUDE: remove these datasources from the list.
+    const char *dsexclude = getConfig("RPDT_DATASOURCES_EXCLUDE", "datasources_exclude", "");
+    if (dsexclude[0] != '\0') {
+        std::string dslist(dsexclude);
+        size_t pos = 0, end;
+        do {
+            end = dslist.find(',', pos);
+            std::string name = dslist.substr(pos, end == std::string::npos ? end : end - pos);
+            if (!name.empty())
+                factories.remove(name + "Factory");
+            pos = end + 1;
+        } while (end != std::string::npos);
+    }
+
+    std::list<std::string> rocmFactories = {
         "RocprofDataSourceFactory",
-        "RoctracerDataSourceFactory",
-        "CuptiDataSourceFactory",
-        "RlogDataSourceFactory",
-        "RocmSmiDataSourceFactory"
+        "ClrDataSourceFactory",
+        "RoctracerDataSourceFactory"
         };
 
-
+    bool rocmSourceAdded = false;
     for (auto it = factories.begin(); it != factories.end(); ++it) {
+        bool isRocmFactory = std::find(rocmFactories.begin(), rocmFactories.end(), *it) != rocmFactories.end();
+        if (isRocmFactory && rocmSourceAdded)
+            continue;
         DataSource* (*func) (void) = (DataSource* (*)()) dlsym(RTLD_DEFAULT, (*it).c_str());
         if (func) {
             m_sources.push_back(func());
-            //fprintf(stderr, "Using: %s\n", (*it).c_str());
+            if (isRocmFactory)
+                rocmSourceAdded = true;
+            std::string sourceName = it->substr(0, it->size() - 7);  // strip "Factory"
+            m_storage->metadataTable().insert("process_datasource", fmt::format("pid={} source={}", GetPid(), sourceName));
         }
     }
 

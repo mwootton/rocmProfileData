@@ -20,7 +20,9 @@
 * THE SOFTWARE.
 ********************************************************************************/
 #include "Logger.h"
+#include "Utility.h"
 
+#include <sqlite3.h>
 #include <vector>
 #include <mutex>
 #include <stdio.h>
@@ -50,6 +52,32 @@ void rpdflush()
 void rpd_resetStorage()
 {
     Logger::singleton().resetStorage();
+}
+
+// Known config properties (property name / env var):
+//   filename       / RPDT_FILENAME       — output file path (default: ./trace.rpd)
+//   delayinit      / RPDT_DELAYINIT      — skip singleton creation at load time (0/1, default: 0)
+//   directwrite    / RPDT_DIRECTWRITE    — write directly to sqlite, no temp tables (0/1, default: 0)
+//   autostart      / RPDT_AUTOSTART      — begin tracing immediately on init (0/1, default: 1)
+//   autoflush      / RPDT_AUTOFLUSH      — periodic flush frequency in Hz (0=off, default: 0)
+//   datasources_priority / RPDT_DATASOURCES_PRIORITY — comma-separated DataSource names to prioritize
+//   datasources_explicit / RPDT_DATASOURCES_EXPLICIT — use only these DataSources (nothing else)
+//   datasources_exclude  / RPDT_DATASOURCES_EXCLUDE  — remove these DataSources from the list
+//   stackframes    / RPDT_STACKFRAMES    — record call stacks (0/1, default: 0)
+//   rocprof_noargs / RPDT_ROCPROF_NOARGS — suppress rocprofiler kernel args (0/1, default: 0)
+//   quiet          / RPDT_QUIET          — suppress informational output to stderr (0/1, default: 0)
+//
+// Embedded usage: set autostart=0 before the first rpdstart() call.
+// autostart=1 (default) holds its own ref on the tracing state, so a
+// subsequent rpdstop() will not actually stop tracing.
+void rpd_setConfig(const char *property, const char *value)
+{
+    rpdtracer::setConfig(property, value);
+}
+
+sqlite3 *rpd_getConnection()
+{
+    return Logger::singleton().getConnection();
 }
 
 }  // extern "C"
@@ -119,6 +147,16 @@ extern "C" int __cxa_atexit(void (*func)(void*), void* arg, void* /*dso_handle*/
     std::lock_guard<std::mutex> lock(s_atexitMutex);
     s_atexitList.push_back({func, arg});
     return 0;
+}
+
+#else // embedded build
+
+namespace {
+    struct EmbeddedDefaults {
+        EmbeddedDefaults() {
+            rpdtracer::setConfig("autostart", "0");
+        }
+    } s_embeddedDefaults;
 }
 
 #endif // RPD_TRACER_BUILD
