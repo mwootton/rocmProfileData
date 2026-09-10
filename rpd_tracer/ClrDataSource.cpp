@@ -7,6 +7,8 @@
 #include <fmt/format.h>
 
 #include "Logger.h"
+#include "LocalStringCache.h"
+#include "UStringCache.h"
 #include "Utility.h"
 
 namespace rpdtracer {
@@ -113,8 +115,10 @@ void ClrDataSource::processRecord(const hipApiRecordExt* r)
     if (!m_apiList.contains(r->api_name))
         return;
 
+    static thread_local LocalStringCache t_stringCache;
     cacheIds();
     Logger &logger = Logger::singleton();
+    uint64_t gen = logger.storageGeneration();
 
     ApiTable::row row;
     row.pid = GetPid();
@@ -123,17 +127,22 @@ void ClrDataSource::processRecord(const hipApiRecordExt* r)
     row.end = static_cast<sqlite3_int64>(r->end_ns);
     row.domain_id = m_domainId;
     row.category_id = EMPTY_STRING_ID;
-    row.apiName_id = logger.stringTable().getOrCreate(r->api_name);
+    row.apiName_id = t_stringCache.lookup(r->api_name, logger.stringTable(), gen);
     row.args_id = EMPTY_STRING_ID;
     row.api_id = m_correlationId.fetch_add(1);
 
-    if (r->has_gpu_activity && r->gpu.op == HIP_OP_DISPATCH_EXT) {
-        std::string args = formatKernelArgs(r->gpu.kernel_args, r->gpu.kernel_args_size);
-        if (!args.empty())
-            row.args_id = logger.ustringTable().create(args);
-    } else if (!r->has_gpu_activity && r->size > 0) {
-        row.args_id = logger.ustringTable().create(
-            fmt::format("{{\"size\":{},\"dst\":\"{}\",\"src\":\"{}\"}}", r->size, r->memory1, r->memory2));
+    {
+        static thread_local rpdtracer::UStringCache t_ustringCache;
+        uint64_t gen = logger.storageGeneration();
+        if (r->has_gpu_activity && r->gpu.op == HIP_OP_DISPATCH_EXT) {
+            std::string args = formatKernelArgs(r->gpu.kernel_args, r->gpu.kernel_args_size);
+            if (!args.empty())
+                row.args_id = t_ustringCache.lookup(args, logger.ustringTable(), gen);
+        } else if (!r->has_gpu_activity && r->size > 0) {
+            row.args_id = t_ustringCache.lookup(
+                fmt::format("{{\"size\":{},\"dst\":\"{}\",\"src\":\"{}\"}}", r->size, r->memory1, r->memory2),
+                logger.ustringTable(), gen);
+        }
     }
 
     logger.apiTable().insert(row);
@@ -152,7 +161,7 @@ void ClrDataSource::processRecord(const hipApiRecordExt* r)
             if (gpu->op == HIP_OP_DISPATCH_EXT) {
                 oprow.opType_id = m_dispatchTypeId;
                 oprow.description_id = (gpu->kernel_name && !gpu->is_graph)
-                    ? logger.stringTable().getOrCreate(gpu->kernel_name)
+                    ? t_stringCache.lookup(gpu->kernel_name, logger.stringTable(), gen)
                     : EMPTY_STRING_ID;
 
                 KernelApiTable::row krow;

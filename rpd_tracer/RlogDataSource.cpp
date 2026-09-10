@@ -29,6 +29,8 @@
 #include <sqlite3.h>
 
 #include "Logger.h"
+#include "LocalStringCache.h"
+#include "UStringCache.h"
 #include "Utility.h"
 
 #include "rlog/Hub.h"
@@ -131,26 +133,35 @@ void RlogDataSource::flush()
 {
 }
 
+void RlogDataSource::reset()
+{
+}
+
+static thread_local rpdtracer::LocalStringCache t_domainCache;
+static thread_local rpdtracer::LocalStringCache t_categoryCache;
+static thread_local rpdtracer::LocalStringCache t_apiNameCache;
+static thread_local rpdtracer::UStringCache t_ustringCache;
+
 void RlogDataSource::end()
 {
     stopTracing();
 }
 
-
 void RlogDataSource::mark(const char *domain, const char *category, const char *apiname, const char *args)
 {
     rpdtracer::Logger &logger = rpdtracer::Logger::singleton();
+    uint64_t gen = logger.storageGeneration();
 
     ApiTable::row row;
     row.pid = GetPid();
     row.tid = GetTid();
     row.start = clocktime_ns();
     row.end = row.start;
-    row.domain_id = logger.stringTable().getOrCreate(std::string(domain));
-    row.category_id = logger.stringTable().getOrCreate(std::string(category));
-    row.apiName_id = logger.stringTable().getOrCreate(std::string(apiname));
-    row.args_id = logger.ustringTable().create(args);
-    row.api_id = rpdtracer::Logger::singleton().nextAnnotationId();
+    row.domain_id = t_domainCache.lookup(domain, logger.stringTable(), gen);
+    row.category_id = t_categoryCache.lookup(category, logger.stringTable(), gen);
+    row.apiName_id = t_apiNameCache.lookup(apiname, logger.stringTable(), gen);
+    row.args_id = t_ustringCache.lookup(args, logger.ustringTable(), gen);
+    row.api_id = logger.nextAnnotationId();
 
     logger.apiTable().insert(row);
 }
@@ -160,16 +171,17 @@ void RlogDataSource::rangePush(const char *domain, const char *category, const c
     registerThreadStack();
 
     rpdtracer::Logger &logger = rpdtracer::Logger::singleton();
+    uint64_t gen = logger.storageGeneration();
 
     ApiTable::row row;
     row.pid = GetPid();
     row.tid = GetTid();
     row.start = clocktime_ns();
     row.end = 0;
-    row.domain_id = logger.stringTable().getOrCreate(std::string(domain));
-    row.category_id = logger.stringTable().getOrCreate(std::string(category));
-    row.apiName_id = logger.stringTable().getOrCreate(std::string(apiname));
-    row.args_id = logger.ustringTable().create(args);
+    row.domain_id = t_domainCache.lookup(domain, logger.stringTable(), gen);
+    row.category_id = t_categoryCache.lookup(category, logger.stringTable(), gen);
+    row.apiName_id = t_apiNameCache.lookup(apiname, logger.stringTable(), gen);
+    row.args_id = t_ustringCache.lookup(args, logger.ustringTable(), gen);
     row.api_id = 0;
 
     t_rlogStack.push_front(row);
