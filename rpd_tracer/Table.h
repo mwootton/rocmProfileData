@@ -73,6 +73,7 @@ public:
     StringTable(const char *basefile, bool directWrite = false);
     virtual ~StringTable();
     static WriterBackend* createWriterBackend(const char *basefile, bool directWrite);
+    static WriterBackend* createNetWriterBackend(const char *host, int port, bool directWrite);
 
     struct row {
         std::string string;
@@ -100,6 +101,7 @@ public:
     UStringTable(const char *basefile, bool directWrite = false);
     virtual ~UStringTable();
     static WriterBackend* createWriterBackend(const char *basefile, bool directWrite);
+    static WriterBackend* createNetWriterBackend(const char *host, int port, bool directWrite);
 
     struct row {
         std::string string;
@@ -127,6 +129,7 @@ public:
     ApiTable(const char *basefile, bool directWrite = false);
     virtual ~ApiTable();
     static WriterBackend* createWriterBackend(const char *basefile, bool directWrite);
+    static WriterBackend* createNetWriterBackend(const char *host, int port, bool directWrite);
 
     struct row {
         int pid;
@@ -160,6 +163,7 @@ public:
     KernelApiTable(const char *basefile, bool directWrite = false);
     virtual ~KernelApiTable();
     static WriterBackend* createWriterBackend(const char *basefile, bool directWrite);
+    static WriterBackend* createNetWriterBackend(const char *host, int port, bool directWrite);
 
     struct row {
         std::string stream;
@@ -199,6 +203,7 @@ public:
     CopyApiTable(const char *basefile, bool directWrite = false);
     virtual ~CopyApiTable();
     static WriterBackend* createWriterBackend(const char *basefile, bool directWrite);
+    static WriterBackend* createNetWriterBackend(const char *host, int port, bool directWrite);
 
     struct row {
         std::string stream;
@@ -258,6 +263,7 @@ public:
     OpTable(const char *basefile, bool directWrite = false);
     virtual ~OpTable();
     static WriterBackend* createWriterBackend(const char *basefile, bool directWrite);
+    static WriterBackend* createNetWriterBackend(const char *host, int port, bool directWrite);
 
     struct row {
         int gpuId;
@@ -268,6 +274,7 @@ public:
         sqlite3_int64 description_id;
         sqlite3_int64 opType_id;
         sqlite3_int64 api_id;  // correlation id
+        sqlite3_int64 op_id;   // explicit primary key (buffer position)
         void serialize(ByteBuffer &buf) const;
         void deserialize(ByteBuffer &buf);
     };
@@ -309,6 +316,7 @@ public:
     MonitorTable(const char *basefile, bool directWrite = false);
     virtual ~MonitorTable();
     static WriterBackend* createWriterBackend(const char *basefile, bool directWrite);
+    static WriterBackend* createNetWriterBackend(const char *host, int port, bool directWrite);
 
     struct row {
         std::string deviceType;
@@ -340,6 +348,7 @@ public:
     StackFrameTable(const char *basefile, bool directWrite = false);
     virtual ~StackFrameTable();
     static WriterBackend* createWriterBackend(const char *basefile, bool directWrite);
+    static WriterBackend* createNetWriterBackend(const char *host, int port, bool directWrite);
 
     struct row {
         sqlite3_int64 api_id {0};   // ApiTable primary key (correlation id)

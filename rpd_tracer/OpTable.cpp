@@ -3,6 +3,7 @@
 #include "Table.h"
 #include "WriterBackend.h"
 #include "ByteBuffer.h"
+#include "NetWriterBackend.h"
 
 #include <map>
 #include <thread>
@@ -63,9 +64,8 @@ public:
         for (int i = start; i <= end; ++i) {
             int index = 1;
             OpTable::row &r = rows[i % capacity];
-            sqlite3_int64 primaryKey = i + m_idOffset;
 
-            sqlite3_bind_int64(m_opInsert, index++, primaryKey);
+            sqlite3_bind_int64(m_opInsert, index++, r.op_id + m_idOffset);
             sqlite3_bind_int(m_opInsert, index++, r.gpuId);
             sqlite3_bind_int(m_opInsert, index++, r.queueId);
             sqlite3_bind_int(m_opInsert, index++, r.sequenceId);
@@ -78,7 +78,7 @@ public:
 
             index = 1;
             sqlite3_bind_int64(m_apiOpInsert, index++, sqlite3_int64(r.api_id) + m_idOffset);
-            sqlite3_bind_int64(m_apiOpInsert, index++, sqlite3_int64(i) + m_idOffset);
+            sqlite3_bind_int64(m_apiOpInsert, index++, r.op_id + m_idOffset);
             sqlite3_step(m_apiOpInsert);
             sqlite3_reset(m_apiOpInsert);
         }
@@ -113,6 +113,16 @@ WriterBackend* OpTable::createWriterBackend(const char *basefile, bool directWri
     return new OpTableWriterBackend(basefile, directWrite);
 }
 
+static void serializeOpTableRow(const void *row, ByteBuffer &buf) {
+    static_cast<const OpTable::row*>(row)->serialize(buf);
+}
+
+WriterBackend* OpTable::createNetWriterBackend(const char *host, int port, bool directWrite)
+{
+    return new NetWriterBackend("OpTable", host, port, directWrite,
+        sizeof(OpTable::row), serializeOpTableRow);
+}
+
 
 class OpTablePrivate
 {
@@ -128,7 +138,8 @@ public:
 
 OpTable::OpTable(const char *basefile, bool directWrite)
 : BufferedTable(basefile, OpTablePrivate::BUFFERSIZE, OpTablePrivate::BATCHSIZE,
-    createWriterBackend(basefile, directWrite))
+    isRemoteNode() ? createNetWriterBackend(getLogaggHost(), getLogaggPort(), directWrite)
+                   : createWriterBackend(basefile, directWrite))
 , d(new OpTablePrivate(this))
 {
 }
@@ -148,7 +159,9 @@ void OpTable::insert(const OpTable::row &row)
         m_wait.wait(lock);
     }
 
-    d->rows[(++m_head) % OpTablePrivate::BUFFERSIZE] = row;
+    int pos = (++m_head) % OpTablePrivate::BUFFERSIZE;
+    d->rows[pos] = row;
+    d->rows[pos].op_id = m_head;
 
     if (workerRunning() == false && (m_head - m_tail) >= OpTablePrivate::BATCHSIZE) {
         m_wait.notify_one();
@@ -206,6 +219,7 @@ void OpTable::row::serialize(ByteBuffer &buf) const {
     buf.writeInt64(description_id);
     buf.writeInt64(opType_id);
     buf.writeInt64(api_id);
+    buf.writeInt64(op_id);
 }
 
 void OpTable::row::deserialize(ByteBuffer &buf) {
@@ -217,6 +231,7 @@ void OpTable::row::deserialize(ByteBuffer &buf) {
     description_id = buf.readInt64();
     opType_id = buf.readInt64();
     api_id = buf.readInt64();
+    op_id = buf.readInt64();
 }
 
 }  // namespace rpdtracer
