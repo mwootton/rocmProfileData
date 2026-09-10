@@ -279,7 +279,7 @@ public:
         void deserialize(ByteBuffer &buf);
     };
 
-    void insert(const row&);
+    sqlite3_int64 insert(const row&);
     void associateDescription(const sqlite3_int64 &api_id, const sqlite3_int64 &string_id);
 
 private:
@@ -363,6 +363,34 @@ public:
 private:
     StackFrameTablePrivate *d;
     friend class StackFrameTablePrivate;
+
+    virtual void writeRows() override;
+    virtual void flushRows() override;
+};
+
+
+class CounterTablePrivate;
+class CounterTable: public BufferedTable
+{
+public:
+    CounterTable(const char *basefile, bool directWrite = false);
+    virtual ~CounterTable();
+    static WriterBackend* createWriterBackend(const char *basefile, bool directWrite);
+    static WriterBackend* createNetWriterBackend(const char *host, int port, bool directWrite);
+
+    struct row {
+        sqlite3_int64 op_id {0};
+        sqlite3_int64 name_id {0};
+        double value {0.0};
+        void serialize(ByteBuffer &buf) const;
+        void deserialize(ByteBuffer &buf);
+    };
+
+    void insert(const row&);
+
+private:
+    CounterTablePrivate *d;
+    friend class CounterTablePrivate;
 
     virtual void writeRows() override;
     virtual void flushRows() override;
