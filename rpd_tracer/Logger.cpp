@@ -14,34 +14,6 @@ using rpdtracer::Logger;
 
 namespace rpdtracer { void rlogClientInit(); }
 
-// Hide the C-api here for now
-extern "C" {
-void rpdstart()
-{
-    Logger::singleton().rpdstart();
-}
-
-void rpdstop()
-{
-    Logger::singleton().rpdstop();
-}
-
-void rpdflush()
-{
-    Logger::singleton().rpdflush();
-}
-
-void rpd_rangePush(const char *domain, const char *apiName, const char* args)
-{
-    Logger::singleton().rpd_rangePush(domain, apiName, args);
-}
-
-void rpd_rangePop()
-{
-    Logger::singleton().rpd_rangePop();
-}
-}  // extern "C"
-
 // GFH - This mirrors the function in the pre-refactor code.  Allows both code paths to compile.
 //   See table classes for users.  Todo: build a proper threaded record writer
 void rpdtracer::createOverheadRecord(uint64_t start, uint64_t end, const std::string &name, const std::string &args)
@@ -79,6 +51,32 @@ void Logger::rpdFinalize() {
         Logger::singleton().finalize();
 }
 
+void Logger::resetStorage()
+{
+    // The autoflush worker calls rpdflush() -> m_storage->flush(); stop it
+    // for the duration of the swap so it cannot use the old storage
+    bool autoflush = (m_worker != nullptr);
+    if (autoflush) {
+        m_done = true;
+        m_worker->join();
+        delete m_worker;
+        m_worker = nullptr;
+    }
+
+    m_storage->finalize();
+    delete m_storage;
+    const char *filename = getConfig("RPDT_FILENAME", "filename", "./trace.rpd");
+    bool directWrite = (atoi(getConfig("RPDT_DIRECTWRITE", "directwrite", "0")) != 0);
+    m_storage = new Storage(filename, directWrite);
+
+    for (auto it = m_sources.begin(); it != m_sources.end(); ++it)
+        (*it)->reset();
+
+    if (autoflush) {
+        m_done = false;
+        m_worker = new std::thread(&Logger::autoflushWorker, this);
+    }
+}
 
 void Logger::rpdstart()
 {
@@ -111,54 +109,12 @@ void Logger::rpdflush()
     for (auto it = m_sources.begin(); it != m_sources.end(); ++it)
             (*it)->flush();
 
-    m_stringTable->flush();
-    m_ustringTable->flush();
-    m_kernelApiTable->flush();
-    m_copyApiTable->flush();
-    m_opTable->flush();
-    m_apiTable->flush();
-    m_monitorTable->flush();
-    m_stackFrameTable->flush();
+    m_storage->flush();
 
     const timestamp_t cb_end_time = clocktime_ns();
     createOverheadRecord(cb_begin_time, cb_end_time, "rpdflush", "");
 }
 
-void Logger::rpd_rangePush(const char *domain, const char *apiName, const char* args)
-{
-    {
-        std::unique_lock<std::mutex> lock(m_activeMutex);
-        if (m_activeCount == 0)
-            return;
-    }
-    ApiTable::row row;
-    row.pid = GetPid();
-    row.tid = GetTid();
-    row.start = clocktime_ns();
-    row.end = row.start;
-    row.apiName_id = m_stringTable->getOrCreate(apiName);
-    row.args_id = m_stringTable->getOrCreate(args);
-    row.api_id = 0;
-    m_apiTable->pushRoctx(row);
-}
-
-void Logger::rpd_rangePop()
-{
-    {
-        std::unique_lock<std::mutex> lock(m_activeMutex);
-        if (m_activeCount == 0)
-            return;
-    }
-    ApiTable::row row;
-    row.pid = GetPid();
-    row.tid = GetTid();
-    row.start = clocktime_ns();
-    row.end = row.start;
-    row.apiName_id = EMPTY_STRING_ID;
-    row.args_id = EMPTY_STRING_ID;
-    row.api_id = 0;
-    m_apiTable->popRoctx(row);
-}
 
 
 
@@ -171,14 +127,6 @@ void Logger::init()
 
     rlog::getProperty("rpd_tracer", "filename", "./trace.rpd");
     const char *filename = getConfig("RPDT_FILENAME", "filename", "./trace.rpd");
-    m_filename = filename;
-
-    // Ensure schema exists
-
-    ensureSchema(filename);
-
-    // Create table recorders
-
     bool directWrite = false;
 
     const char *dwrite = getenv("RPDT_DIRECTWRITE");
@@ -187,26 +135,7 @@ void Logger::init()
         directWrite = (val != 0);
     }
 
-    m_metadataTable = new MetadataTable(filename);
-    m_stringTable = new StringTable(filename, directWrite);
-    m_ustringTable = new UStringTable(filename, directWrite);
-    m_kernelApiTable = new KernelApiTable(filename, directWrite);
-    m_copyApiTable = new CopyApiTable(filename, directWrite);
-    m_opTable = new OpTable(filename, directWrite);
-    m_apiTable = new ApiTable(filename, directWrite);
-    m_monitorTable = new MonitorTable(filename, directWrite);
-    m_stackFrameTable = new StackFrameTable(filename, directWrite);
-
-    // Offset primary keys so they do not collide between sessions
-    sqlite3_int64 offset = m_metadataTable->sessionId() * (sqlite3_int64(1) << 32);
-    m_metadataTable->setIdOffset(offset);
-    m_stringTable->setIdOffset(offset);
-    m_ustringTable->setIdOffset(offset);
-    m_kernelApiTable->setIdOffset(offset);
-    m_copyApiTable->setIdOffset(offset);
-    m_opTable->setIdOffset(offset);
-    m_apiTable->setIdOffset(offset);
-    m_stackFrameTable->setIdOffset(offset);
+    m_storage = new Storage(filename, directWrite);
 
     // Create one instance of each available datasource
     std::list<std::string> factories = {
@@ -282,20 +211,8 @@ void Logger::finalize()
         for (auto it = m_sources.begin(); it != m_sources.end(); ++it)
             (*it)->end();
 
-        // Flush recorders
-        const timestamp_t begin_time = clocktime_ns();
-        m_opTable->finalize();		// OpTable before subclassOpTables
-        m_kernelApiTable->finalize();
-        m_copyApiTable->finalize();
-        m_monitorTable->finalize();
-        m_stackFrameTable->finalize();
-        m_writeOverheadRecords = false;	// Don't make any new overhead records (api calls)
-        m_apiTable->finalize();
-        m_ustringTable->finalize();
-        m_stringTable->finalize();	// String table last
-
-        const timestamp_t end_time = clocktime_ns();
-        fprintf(stderr, "rpd_tracer: finalized in %f ms\n", 1.0 * (end_time - begin_time) / 1000000);
+        m_writeOverheadRecords = false;
+        m_storage->finalize();
     }
 }
 
@@ -311,21 +228,17 @@ void Logger::createOverheadRecord(uint64_t start, uint64_t end, const std::strin
 {
     if (m_writeOverheadRecords == false)
         return;
-    static sqlite3_int64 domain_id = m_stringTable->getOrCreate("rpd_tracer");
-    static sqlite3_int64 category_id = m_stringTable->getOrCreate("overhead");
     ApiTable::row row;
     row.pid = GetPid();
     row.tid = GetTid();
     row.start = start;
     row.end = end;
-    row.domain_id = domain_id;
-    row.category_id = category_id;
-    row.apiName_id = m_stringTable->getOrCreate(name);
-    row.args_id = m_ustringTable->create(args);
-    row.api_id = 0;
+    row.domain_id = m_storage->overheadDomainId();
+    row.category_id = m_storage->overheadCategoryId();
+    row.apiName_id = m_storage->stringTable().getOrCreate(name);
+    row.args_id = m_storage->ustringTable().create(args);
+    row.api_id = m_storage->nextAnnotationId();
 
-    //fprintf(stderr, "overhead: %s (%s) - %f usec\n", name.c_str(), args.c_str(), (end-start) / 1000.0);
-
-    m_apiTable->insertRoctx(row);
+    m_storage->apiTable().insert(row);
 }
 
